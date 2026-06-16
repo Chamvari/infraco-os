@@ -1,0 +1,23 @@
+import { Module } from '@nestjs/common';
+import { CustomerModule } from './modules/customer/customer.module';
+import { AccountModule } from './modules/account/account.module';
+import { FinancialModule } from './modules/financial/financial.module';
+import { SalesModule } from './modules/sales/sales.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { ReportingModule } from './modules/reporting/reporting.module';
+import { LeaseModule } from './modules/lease/lease.module';
+import { ArrearsModule } from './modules/financial/arrears.module';
+
+@Module({
+  imports: [
+    CustomerModule,
+    AccountModule,
+    FinancialModule,
+    SalesModule,
+    PaymentsModule,
+    ReportingModule,
+    LeaseModule,
+    ArrearsModule,
+  ],
+})
+export class AppModule {}

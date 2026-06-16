@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgis/postgis:15-3.4
+    container_name: infraco-db
+    environment:
+      POSTGRES_USER: infraco
+      POSTGRES_PASSWORD: dev_change_me
+      POSTGRES_DB: infraco_os
+    ports:
+      - "5432:5432"
+    volumes:
+      - infraco_pgdata:/var/lib/postgresql/data
+      # The schema is applied on first boot of an empty data volume:
+      - ./db/infraco_os_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infraco -d infraco_os"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  infraco_pgdata:
