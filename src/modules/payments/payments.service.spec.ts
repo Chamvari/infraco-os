@@ -16,6 +16,10 @@ describe('PaymentsService.handleCallback', () => {
     parkSuspenseTx: jest.Mock;
     recomputeAccount: jest.Mock;
   };
+  let utility: {
+    vendFromCallbackTx: jest.Mock;
+    purchaseLteFromCallbackTx: jest.Mock;
+  };
 
   const callback = (over: Record<string, unknown> = {}) => ({
     platform_txn_id: 'TX-1',
@@ -43,9 +47,14 @@ describe('PaymentsService.handleCallback', () => {
       parkSuspenseTx: jest.fn().mockResolvedValue(undefined),
       recomputeAccount: jest.fn().mockResolvedValue({}),
     };
+    utility = {
+      vendFromCallbackTx: jest.fn().mockResolvedValue({ vendId: 'v-1', duplicate: false }),
+      purchaseLteFromCallbackTx: jest.fn().mockResolvedValue({ purchaseId: 'p-1', duplicate: false }),
+    };
     service = new PaymentsService(
       prisma as unknown as PrismaService,
       ledger as unknown as LedgerService,
+      utility as unknown as import('../utility/utility.service').UtilityService,
     );
   });
 
@@ -147,5 +156,54 @@ describe('PaymentsService.handleCallback', () => {
     );
     expect(mark).toBeDefined();
     expect(ledger.recomputeAccount).not.toHaveBeenCalled();
+  });
+
+  // -- Module D routing (UTIL-TKN-001 / UTIL-LTE-003) -------------------------
+
+  it('utility_vend: routes to Module D, marks matched, never touches the ledger', async () => {
+    const res = await service.handleCallback(
+      callback({ purpose: 'utility_vend', meter_serial: 'PWR-001', bill_ref: undefined }),
+    );
+
+    expect(res).toBe('matched');
+    expect(utility.vendFromCallbackTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ platform_txn_id: 'TX-1', meter_serial: 'PWR-001', amount_paid: 1000 }),
+      { actorId: '', actorRole: 'system' },
+    );
+    expect(ledger.postPaymentTx).not.toHaveBeenCalled();
+    expect(ledger.parkSuspenseTx).not.toHaveBeenCalled();
+  });
+
+  it('duplicate vend callback: stopped at the callback unique index, never vends', async () => {
+    tx.$executeRawUnsafe.mockRejectedValueOnce({
+      meta: { message: 'duplicate key value violates unique constraint "uq_callback_txn"' },
+    });
+
+    const res = await service.handleCallback(
+      callback({ purpose: 'utility_vend', meter_serial: 'PWR-001' }),
+    );
+
+    expect(res).toBe('duplicate');
+    expect(utility.vendFromCallbackTx).not.toHaveBeenCalled();
+  });
+
+  it('lte_purchase: routes to Module D provisioning, marks matched', async () => {
+    const res = await service.handleCallback(
+      callback({
+        purpose: 'lte_purchase',
+        subscriber_id: 's-1',
+        product_id: 'prod-1',
+        bill_ref: undefined,
+      }),
+    );
+
+    expect(res).toBe('matched');
+    expect(utility.purchaseLteFromCallbackTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ subscriber_id: 's-1', product_id: 'prod-1' }),
+      { actorId: '', actorRole: 'system' },
+    );
+    expect(ledger.postPaymentTx).not.toHaveBeenCalled();
   });
 });

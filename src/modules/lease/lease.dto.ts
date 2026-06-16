@@ -1,4 +1,4 @@
-import { CurrencyCode, LeaseStatus, UtilityType } from '../../common/enums';
+import { CurrencyCode, LeaseStatus, RentalUtilityType } from '../../common/enums';
 import { Actor } from '../customer/customer.dto';
 
 /**
@@ -57,7 +57,7 @@ export interface RentRunDto extends Actor {
  * month's rent invoice instead.
  */
 export interface UtilityChargeDto extends Actor {
-  utilityType: UtilityType;
+  utilityType: RentalUtilityType;
   amount: number;
   separate?: boolean; // default true
   asOf?: string;

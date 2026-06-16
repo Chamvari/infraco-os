@@ -7,6 +7,8 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
 import { LeaseModule } from './modules/lease/lease.module';
 import { ArrearsModule } from './modules/financial/arrears.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { UtilityModule } from './modules/utility/utility.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { ArrearsModule } from './modules/financial/arrears.module';
     ReportingModule,
     LeaseModule,
     ArrearsModule,
+    OnboardingModule,
+    UtilityModule,
   ],
 })
 export class AppModule {}

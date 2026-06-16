@@ -11,7 +11,7 @@ import { LedgerService } from '../financial/ledger.service';
 import {
   CURRENCY_CODES,
   LEASE_STATUSES,
-  UTILITY_TYPES,
+  RENTAL_UTILITY_TYPES,
   CurrencyCode,
   LeaseStatus,
 } from '../../common/enums';
@@ -462,9 +462,9 @@ export class LeaseService {
     leaseId: string,
     dto: UtilityChargeDto,
   ): Promise<{ invoiceId: string; reference: string; mode: 'separate' | 'merged'; amount: number }> {
-    if (!UTILITY_TYPES.includes(dto.utilityType)) {
+    if (!RENTAL_UTILITY_TYPES.includes(dto.utilityType)) {
       throw new BadRequestException(
-        `Invalid utilityType '${dto.utilityType}'. Allowed: ${UTILITY_TYPES.join(', ')}.`,
+        `Invalid utilityType '${dto.utilityType}'. Allowed: ${RENTAL_UTILITY_TYPES.join(', ')}.`,
       );
     }
     if (!(dto.amount > 0)) {

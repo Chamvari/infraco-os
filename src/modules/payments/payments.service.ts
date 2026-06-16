@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../prisma.service';
 import { LedgerService } from '../financial/ledger.service';
+import { UtilityService } from '../utility/utility.service';
 import { CurrencyCode } from '../../common/enums';
 
 /**
@@ -25,6 +26,9 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
+    // Module D: a callback whose purpose is a utility vend / LTE purchase is
+    // routed here so it commits atomically with the callback record.
+    private readonly utility: UtilityService,
   ) {}
 
   /** PAY-API-008: verify the HMAC signature on an inbound callback. */
@@ -74,6 +78,15 @@ export class PaymentsService {
     currency?: string;
     channel?: string;
     signatureValid: boolean;
+    // Module D routing (UTIL-TKN-001 / UTIL-LTE-003). Absent → ordinary
+    // invoice/arrears payment via the ledger.
+    purpose?: 'utility_vend' | 'lte_purchase';
+    meter_serial?: string;
+    meter_id?: string;
+    token_kind?: string;
+    customer_id?: string;
+    subscriber_id?: string;
+    product_id?: string;
   }): Promise<'matched' | 'duplicate' | 'unmatched'> {
     const currency = (payload.currency ?? 'USD') as CurrencyCode;
 
@@ -90,11 +103,64 @@ export class PaymentsService {
           payload.amount_paid, currency, payload.channel ?? null, payload.signatureValid,
           JSON.stringify(payload),
         );
-      } catch (e: any) {
-        if (String(e?.meta?.message ?? e?.message).includes('uq_callback_txn')) {
+      } catch (e: unknown) {
+        if (this.isUniqueViolation(e)) {
           return { status: 'duplicate' as const, accountId: null };
         }
         throw e;
+      }
+
+      // Module D (customer billing plane): a vend / LTE purchase is driven by
+      // the same callback, idempotent on platform_txn_id. It commits in THIS
+      // transaction alongside the callback record, then we mark it matched.
+      const sysActor = { actorId: '', actorRole: 'system' };
+      if (payload.purpose === 'utility_vend') {
+        await this.utility.vendFromCallbackTx(
+          tx,
+          {
+            platform_txn_id: payload.platform_txn_id,
+            meter_serial: payload.meter_serial,
+            meter_id: payload.meter_id,
+            amount_paid: payload.amount_paid,
+            currency: payload.currency,
+            channel: payload.channel,
+            customer_id: payload.customer_id,
+            token_kind: payload.token_kind,
+          },
+          sysActor,
+        );
+        await tx.$executeRawUnsafe(
+          `UPDATE pay.callback SET status = 'matched', processed_at = now() WHERE platform_txn_id = $1`,
+          payload.platform_txn_id,
+        );
+        return { status: 'matched' as const, accountId: null };
+      }
+      if (payload.purpose === 'lte_purchase') {
+        if (!payload.subscriber_id || !payload.product_id) {
+          await tx.$executeRawUnsafe(
+            `UPDATE pay.callback SET status = 'unmatched', processed_at = now() WHERE platform_txn_id = $1`,
+            payload.platform_txn_id,
+          );
+          return { status: 'unmatched' as const, accountId: null };
+        }
+        await this.utility.purchaseLteFromCallbackTx(
+          tx,
+          {
+            platform_txn_id: payload.platform_txn_id,
+            subscriber_id: payload.subscriber_id,
+            product_id: payload.product_id,
+            amount_paid: payload.amount_paid,
+            currency: payload.currency,
+            channel: payload.channel,
+            customer_id: payload.customer_id,
+          },
+          sysActor,
+        );
+        await tx.$executeRawUnsafe(
+          `UPDATE pay.callback SET status = 'matched', processed_at = now() WHERE platform_txn_id = $1`,
+          payload.platform_txn_id,
+        );
+        return { status: 'matched' as const, accountId: null };
       }
 
       // Match to an invoice by bill_ref (== invoice.reference).
@@ -160,6 +226,17 @@ export class PaymentsService {
     }
 
     return outcome.status;
+  }
+
+  /**
+   * True if the error is a Postgres unique-constraint violation (SQLSTATE 23505).
+   * Prisma surfaces the SQLSTATE in meta.code and a "Key (...)=(...) already
+   * exists" message — the index NAME is not exposed, so match on the code.
+   */
+  private isUniqueViolation(e: unknown): boolean {
+    const x = e as { code?: string; meta?: { code?: string; message?: string }; message?: string };
+    const blob = `${x?.meta?.code ?? ''} ${x?.meta?.message ?? ''} ${x?.message ?? ''}`;
+    return x?.meta?.code === '23505' || /\b23505\b|unique constraint|already exists|duplicate key/i.test(blob);
   }
 
   private mapChannel(ch?: string): string {

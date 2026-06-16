@@ -1,16 +1,3 @@
-// InfraCo OS — Prisma schema (Phase 1 subset)
-//
-// The SQL schema in db/infraco_os_schema.sql is the SOURCE OF TRUTH.
-// This file is a hand-written starting point for the Phase 1 tables so the
-// backend can compile immediately. Once the DB is applied, you can regenerate
-// the full, accurate schema with:
-//
-//     npm run prisma:pull   # introspect the live DB into this file
-//     npm run prisma:generate
-//
-// Note: enums and the reserve_plot() stored procedure live in SQL. Prisma calls
-// the procedure via $queryRaw (see SalesService.reservePlot).
-
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["multiSchema", "postgresqlExtensions"]
@@ -19,106 +6,768 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
+  extensions = [btree_gist, pg_trgm, pgcrypto, postgis]
   schemas    = ["core", "fin", "sales"]
-  extensions = [pgcrypto, postgis, pg_trgm, btree_gist]
 }
 
 /// ---- core ----
 model AppUser {
-  user_id     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  username    String   @unique
-  full_name   String
-  email       String?  @unique
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  user_id                         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username                        String           @unique
+  full_name                       String
+  email                           String?          @unique
+  phone                           String?
+  status                          user_status      @default(active)
+  mfa_enabled                     Boolean          @default(false)
+  last_login_at                   DateTime?        @db.Timestamptz(6)
+  created_at                      DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at                      DateTime         @default(now()) @db.Timestamptz(6)
+  document                        document[]
+  user_role                       user_role[]
+  arrears_action                  arrears_action[]
+  customer                        Customer[]
+  journal                         journal[]
+  ledger_entry                    ledger_entry[]
+  suspense_item                   suspense_item[]
+  commission                      commission[]
+  lead                            lead[]
+  reservation                     Reservation[]
+  sale_sale_agent_idToapp_user    sale[]           @relation("sale_agent_idToapp_user")
+  sale_sale_approved_byToapp_user sale[]           @relation("sale_approved_byToapp_user")
+  title_event                     title_event[]
 
   @@map("app_user")
   @@schema("core")
 }
 
 /// ---- fin ----
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model Customer {
-  customer_id    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  customer_type  String    // enum fin.customer_type in DB
+  customer_id    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_type  customer_type
   first_name     String
   last_name      String
   id_number      String?
   phone          String?
   email          String?
+  address        String?
   country        String?
   wallet_id      String?
-  kyc_status     String    @default("pending")
-  dpa_consent    Boolean   @default(false)
-  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  kyc_status     kyc_status    @default(pending)
+  dpa_consent    Boolean       @default(false)
+  dpa_consent_at DateTime?     @db.Timestamptz(6)
+  created_by     String?       @db.Uuid
+  created_at     DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime      @default(now()) @db.Timestamptz(6)
   accounts       Account[]
+  app_user       AppUser?      @relation(fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  statement      statement[]
+  lead           lead[]
+  plot           Plot[]
+  reservation    Reservation[]
+  sale           sale[]
 
+  @@index([id_number], map: "idx_customer_idnum")
+  @@index([phone], map: "idx_customer_phone")
   @@map("customer")
   @@schema("fin")
 }
 
 model Account {
-  account_id   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  customer_id  String    @db.Uuid
-  account_type String    // enum fin.account_type in DB
-  reference    String    @unique
-  status       String    @default("active")
-  balance      Decimal   @default(0) @db.Decimal(18, 2)
-  currency     String    @default("USD")
-  opened_at    DateTime  @default(now()) @db.Timestamptz(6)
-  customer     Customer  @relation(fields: [customer_id], references: [customer_id])
-  invoices     Invoice[]
+  account_id      String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id     String            @db.Uuid
+  account_type    account_type
+  reference       String            @unique
+  status          account_status    @default(active)
+  balance         Decimal           @default(0) @db.Decimal(18, 2)
+  currency        currency_code     @default(USD)
+  opened_at       DateTime          @default(now()) @db.Timestamptz(6)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  customer        Customer          @relation(fields: [customer_id], references: [customer_id], onDelete: NoAction, onUpdate: NoAction)
+  arrears         arrears[]
+  arrears_action  arrears_action[]
+  instalment_plan instalment_plan[]
+  invoices        Invoice[]
+  ledger_entry    ledger_entry[]
+  suspense_item   suspense_item[]
+  sale            sale[]
 
+  @@index([customer_id], map: "idx_account_customer")
   @@map("account")
   @@schema("fin")
 }
 
 model Invoice {
-  invoice_id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  account_id        String   @db.Uuid
-  invoice_type      String   // enum fin.invoice_type in DB
-  reference         String   @unique
-  amount            Decimal  @db.Decimal(18, 2)
-  amount_paid       Decimal  @default(0) @db.Decimal(18, 2)
-  currency          String   @default("USD")
-  due_date          DateTime @db.Date
-  status            String   @default("draft")
-  description       String?
-  platform_bill_id  String?
-  source_table      String?
-  source_id         String?
-  created_at        DateTime @default(now()) @db.Timestamptz(6)
-  account           Account  @relation(fields: [account_id], references: [account_id])
+  invoice_id       String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  account_id       String         @db.Uuid
+  invoice_type     invoice_type
+  reference        String         @unique
+  amount           Decimal        @db.Decimal(18, 2)
+  amount_paid      Decimal        @default(0) @db.Decimal(18, 2)
+  currency         currency_code  @default(USD)
+  due_date         DateTime       @db.Date
+  status           invoice_status @default(draft)
+  description      String?
+  platform_bill_id String?
+  source_table     String?
+  source_id        String?
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime       @default(now()) @db.Timestamptz(6)
+  account          Account        @relation(fields: [account_id], references: [account_id], onDelete: NoAction, onUpdate: NoAction)
+  ledger_entry     ledger_entry[]
 
+  @@index([account_id], map: "idx_invoice_account")
+  @@index([platform_bill_id], map: "idx_invoice_billid")
+  @@index([due_date], map: "idx_invoice_due")
+  @@index([status], map: "idx_invoice_status")
   @@map("invoice")
   @@schema("fin")
 }
 
 /// ---- sales ----
 model Plot {
-  plot_id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  development_id String   @db.Uuid
+  plot_id        String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  development_id String                   @db.Uuid
+  phase_id       String?                  @db.Uuid
   plot_number    String
-  plot_type      String   // enum sales.plot_type in DB
-  area_sqm       Decimal? @db.Decimal(14, 2)
-  area_ha        Decimal? @db.Decimal(12, 4)
-  price          Decimal? @db.Decimal(18, 2)
-  currency       String   @default("USD")
-  status         String   @default("available") // enum sales.plot_status in DB
-  customer_id    String?  @db.Uuid
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  plot_type      plot_type
+  area_sqm       Decimal?                 @db.Decimal(14, 2)
+  area_ha        Decimal?                 @db.Decimal(12, 4)
+  price          Decimal?                 @db.Decimal(18, 2)
+  currency       currency_code            @default(USD)
+  status         plot_status              @default(available)
+  customer_id    String?                  @db.Uuid
+  gps_lat        Decimal?                 @db.Decimal(10, 7)
+  gps_lng        Decimal?                 @db.Decimal(10, 7)
+  geom           Unsupported("geometry")?
+  utilities      Json                     @default("{}")
+  created_at     DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime                 @default(now()) @db.Timestamptz(6)
+  customer       Customer?                @relation(fields: [customer_id], references: [customer_id], onDelete: NoAction, onUpdate: NoAction)
+  development    development              @relation(fields: [development_id], references: [development_id], onDelete: NoAction, onUpdate: NoAction)
+  phase          phase?                   @relation(fields: [phase_id], references: [phase_id], onDelete: NoAction, onUpdate: NoAction)
+  reservation    Reservation[]
+  sale           sale[]
 
+  @@unique([development_id, plot_number])
+  @@index([development_id, phase_id], map: "idx_plot_dev")
+  @@index([geom], map: "idx_plot_geom", type: Gist)
+  @@index([status], map: "idx_plot_status")
   @@map("plot")
   @@schema("sales")
 }
 
 model Reservation {
-  reservation_id String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  plot_id        String   @db.Uuid
-  customer_id    String?  @db.Uuid
-  agent_id       String?  @db.Uuid
-  status         String   @default("active")
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
-  expires_at     DateTime @db.Timestamptz(6)
+  reservation_id String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plot_id        String             @db.Uuid
+  customer_id    String?            @db.Uuid
+  agent_id       String?            @db.Uuid
+  status         reservation_status @default(active)
+  created_at     DateTime           @default(now()) @db.Timestamptz(6)
+  expires_at     DateTime           @db.Timestamptz(6)
+  app_user       AppUser?           @relation(fields: [agent_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  customer       Customer?          @relation(fields: [customer_id], references: [customer_id], onDelete: NoAction, onUpdate: NoAction)
+  plot           Plot               @relation(fields: [plot_id], references: [plot_id], onDelete: NoAction, onUpdate: NoAction)
 
+  @@index([plot_id], map: "idx_reservation_plot")
   @@map("reservation")
+  @@schema("sales")
+}
+
+model audit_log {
+  audit_id    BigInt       @id @default(autoincrement())
+  actor_id    String?      @db.Uuid
+  actor_role  String?
+  action      audit_action
+  schema_name String
+  table_name  String
+  entity_id   String?
+  before_val  Json?
+  after_val   Json?
+  occurred_at DateTime     @default(now()) @db.Timestamptz(6)
+
+  @@index([occurred_at], map: "idx_audit_occurred")
+  @@index([schema_name, table_name, entity_id], map: "idx_audit_table_entity")
+  @@schema("core")
+}
+
+model authority_rule {
+  rule_id       String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  action_code   String
+  max_amount    Decimal?       @db.Decimal(18, 2)
+  currency      currency_code? @default(USD)
+  required_role String?        @db.Uuid
+  dual_auth     Boolean        @default(false)
+  created_at    DateTime       @default(now()) @db.Timestamptz(6)
+  role          role?          @relation(fields: [required_role], references: [role_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("core")
+}
+
+model document {
+  document_id   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_schema String
+  entity_table  String
+  entity_id     String
+  doc_type      String
+  version       Int      @default(1)
+  storage_ref   String
+  access_tag    String   @default("internal")
+  uploaded_by   String?  @db.Uuid
+  uploaded_at   DateTime @default(now()) @db.Timestamptz(6)
+  app_user      AppUser? @relation(fields: [uploaded_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([entity_schema, entity_table, entity_id, doc_type, version])
+  @@index([entity_schema, entity_table, entity_id], map: "idx_document_entity")
+  @@schema("core")
+}
+
+model notification {
+  notification_id String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipient_kind  String
+  recipient_id    String    @db.Uuid
+  channel         String
+  template_code   String
+  payload         Json?
+  status          String    @default("queued")
+  sent_at         DateTime? @db.Timestamptz(6)
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([recipient_kind, recipient_id], map: "idx_notif_recipient")
+  @@schema("core")
+}
+
+model permission {
+  permission_id   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String            @unique
+  description     String?
+  role_permission role_permission[]
+
+  @@schema("core")
+}
+
+model role {
+  role_id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String            @unique
+  name            String
+  description     String?
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  authority_rule  authority_rule[]
+  role_permission role_permission[]
+  user_role       user_role[]
+
+  @@schema("core")
+}
+
+model role_permission {
+  role_id       String     @db.Uuid
+  permission_id String     @db.Uuid
+  permission    permission @relation(fields: [permission_id], references: [permission_id], onDelete: Cascade, onUpdate: NoAction)
+  role          role       @relation(fields: [role_id], references: [role_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([role_id, permission_id])
+  @@schema("core")
+}
+
+model user_role {
+  user_id  String  @db.Uuid
+  role_id  String  @db.Uuid
+  role     role    @relation(fields: [role_id], references: [role_id], onDelete: Cascade, onUpdate: NoAction)
+  app_user AppUser @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([user_id, role_id])
+  @@schema("core")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model acc_period {
+  period_id String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  year      Int
+  month     Int
+  status    period_status @default(open)
+  closed_at DateTime?     @db.Timestamptz(6)
+  journal   journal[]
+
+  @@unique([year, month])
+  @@schema("fin")
+}
+
+model arrears {
+  arrears_id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  account_id        String       @db.Uuid
+  total_outstanding Decimal      @default(0) @db.Decimal(18, 2)
+  days_overdue      Int          @default(0)
+  risk_category     arrears_risk @default(current)
+  last_payment_date DateTime?    @db.Date
+  snapshot_at       DateTime     @default(now()) @db.Timestamptz(6)
+  account           Account      @relation(fields: [account_id], references: [account_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([account_id], map: "idx_arrears_account")
+  @@index([risk_category], map: "idx_arrears_risk")
+  @@schema("fin")
+}
+
+model arrears_action {
+  action_id    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  account_id   String   @db.Uuid
+  action_type  String
+  triggered_at DateTime @default(now()) @db.Timestamptz(6)
+  performed_by String?  @db.Uuid
+  account      Account  @relation(fields: [account_id], references: [account_id], onDelete: NoAction, onUpdate: NoAction)
+  app_user     AppUser? @relation(fields: [performed_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("fin")
+}
+
+model coa_account {
+  coa_id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code              String         @unique
+  name              String
+  account_class     account_class
+  asset_class       asset_class    @default(group)
+  parent_id         String?        @db.Uuid
+  is_postable       Boolean        @default(true)
+  active            Boolean        @default(true)
+  created_at        DateTime       @default(now()) @db.Timestamptz(6)
+  coa_account       coa_account?   @relation("coa_accountTocoa_account", fields: [parent_id], references: [coa_id], onDelete: NoAction, onUpdate: NoAction)
+  other_coa_account coa_account[]  @relation("coa_accountTocoa_account")
+  journal_line      journal_line[]
+
+  @@index([account_class, asset_class], map: "idx_coa_class")
+  @@schema("fin")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model instalment_plan {
+  plan_id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  account_id      String        @db.Uuid
+  total_price     Decimal       @db.Decimal(18, 2)
+  deposit         Decimal       @default(0) @db.Decimal(18, 2)
+  num_instalments Int
+  frequency       String        @default("monthly")
+  structure       String        @default("equal")
+  start_date      DateTime      @db.Date
+  currency        currency_code @default(USD)
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  account         Account       @relation(fields: [account_id], references: [account_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([account_id], map: "idx_plan_account")
+  @@schema("fin")
+}
+
+model journal {
+  journal_id    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  period_id     String?        @db.Uuid
+  journal_date  DateTime       @default(dbgenerated("CURRENT_DATE")) @db.Date
+  narrative     String?
+  source_table  String?
+  source_id     String?
+  reversed_by   String?        @db.Uuid
+  posted_by     String?        @db.Uuid
+  posted_at     DateTime       @default(now()) @db.Timestamptz(6)
+  acc_period    acc_period?    @relation(fields: [period_id], references: [period_id], onDelete: NoAction, onUpdate: NoAction)
+  app_user      AppUser?       @relation(fields: [posted_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  journal       journal?       @relation("journalTojournal", fields: [reversed_by], references: [journal_id], onDelete: NoAction, onUpdate: NoAction)
+  other_journal journal[]      @relation("journalTojournal")
+  journal_line  journal_line[]
+
+  @@schema("fin")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model journal_line {
+  line_id     String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  journal_id  String      @db.Uuid
+  coa_id      String      @db.Uuid
+  asset_class asset_class @default(group)
+  debit       Decimal     @default(0) @db.Decimal(18, 2)
+  credit      Decimal     @default(0) @db.Decimal(18, 2)
+  coa_account coa_account @relation(fields: [coa_id], references: [coa_id], onDelete: NoAction, onUpdate: NoAction)
+  journal     journal     @relation(fields: [journal_id], references: [journal_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([coa_id], map: "idx_jline_coa")
+  @@index([journal_id], map: "idx_jline_journal")
+  @@schema("fin")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ledger_entry {
+  ledger_id       BigInt          @id @default(autoincrement())
+  account_id      String          @db.Uuid
+  invoice_id      String?         @db.Uuid
+  txn_type        txn_type
+  amount          Decimal         @db.Decimal(18, 2)
+  currency        currency_code   @default(USD)
+  payment_method  payment_method?
+  platform_txn_id String?
+  narrative       String?
+  posted_by       String?         @db.Uuid
+  posted_at       DateTime        @default(now()) @db.Timestamptz(6)
+  account         Account         @relation(fields: [account_id], references: [account_id], onDelete: NoAction, onUpdate: NoAction)
+  invoice         Invoice?        @relation(fields: [invoice_id], references: [invoice_id], onDelete: NoAction, onUpdate: NoAction)
+  app_user        AppUser?        @relation(fields: [posted_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([account_id], map: "idx_ledger_account")
+  @@index([invoice_id], map: "idx_ledger_invoice")
+  @@schema("fin")
+}
+
+model statement {
+  statement_id    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id     String   @db.Uuid
+  period_start    DateTime @db.Date
+  period_end      DateTime @db.Date
+  opening_balance Decimal  @db.Decimal(18, 2)
+  closing_balance Decimal  @db.Decimal(18, 2)
+  generated_at    DateTime @default(now()) @db.Timestamptz(6)
+  customer        Customer @relation(fields: [customer_id], references: [customer_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("fin")
+}
+
+model suspense_item {
+  suspense_id         String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  platform_txn_id     String                      @unique
+  amount              Decimal                     @db.Decimal(18, 2)
+  currency            currency_code               @default(USD)
+  channel             Unsupported("pay_channel")?
+  raw_payload         Json?
+  resolved            Boolean                     @default(false)
+  resolved_to_account String?                     @db.Uuid
+  resolved_by         String?                     @db.Uuid
+  received_at         DateTime                    @default(now()) @db.Timestamptz(6)
+  app_user            AppUser?                    @relation(fields: [resolved_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  account             Account?                    @relation(fields: [resolved_to_account], references: [account_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("fin")
+}
+
+model commission {
+  commission_id    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sale_id          String   @db.Uuid
+  agent_id         String   @db.Uuid
+  basis            String
+  rate             Decimal? @db.Decimal(6, 4)
+  amount           Decimal? @db.Decimal(18, 2)
+  earned_milestone String?
+  earned           Boolean  @default(false)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  app_user         AppUser  @relation(fields: [agent_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  sale             sale     @relation(fields: [sale_id], references: [sale_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([agent_id], map: "idx_commission_agent")
+  @@schema("sales")
+}
+
+model development {
+  development_id String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String
+  dev_type       development_type
+  total_area_ha  Decimal?                 @db.Decimal(12, 2)
+  boundary       Unsupported("geometry")?
+  created_at     DateTime                 @default(now()) @db.Timestamptz(6)
+  infra_feature  infra_feature[]
+  phase          phase[]
+  plot           Plot[]
+
+  @@schema("sales")
+}
+
+model infra_feature {
+  feature_id     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  development_id String                   @db.Uuid
+  feature_type   String
+  name           String?
+  geom           Unsupported("geometry")?
+  asset_id       String?                  @db.Uuid
+  created_at     DateTime                 @default(now()) @db.Timestamptz(6)
+  development    development              @relation(fields: [development_id], references: [development_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([development_id], map: "idx_infra_dev")
+  @@index([geom], map: "idx_infra_geom", type: Gist)
+  @@schema("sales")
+}
+
+model lead {
+  lead_id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name          String
+  phone              String?
+  email              String?
+  country            String?
+  source             String?
+  interest           Json?
+  agent_id           String?   @db.Uuid
+  converted_customer String?   @db.Uuid
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  app_user           AppUser?  @relation(fields: [agent_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  customer           Customer? @relation(fields: [converted_customer], references: [customer_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("sales")
+}
+
+model phase {
+  phase_id       String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  development_id String                   @db.Uuid
+  name           String
+  planned_units  Int?
+  boundary       Unsupported("geometry")?
+  start_date     DateTime?                @db.Date
+  end_date       DateTime?                @db.Date
+  created_at     DateTime                 @default(now()) @db.Timestamptz(6)
+  development    development              @relation(fields: [development_id], references: [development_id], onDelete: NoAction, onUpdate: NoAction)
+  plot           Plot[]
+
+  @@unique([development_id, name])
+  @@schema("sales")
+}
+
+model sale {
+  sale_id                             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plot_id                             String        @db.Uuid
+  customer_id                         String        @db.Uuid
+  agent_id                            String?       @db.Uuid
+  account_id                          String?       @db.Uuid
+  price                               Decimal       @db.Decimal(18, 2)
+  currency                            currency_code @default(USD)
+  status                              sale_status   @default(pending_approval)
+  title_stage                         title_stage   @default(agreement)
+  approved_by                         String?       @db.Uuid
+  approved_at                         DateTime?     @db.Timestamptz(6)
+  cancelled_reason                    String?
+  created_at                          DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at                          DateTime      @default(now()) @db.Timestamptz(6)
+  commission                          commission[]
+  account                             Account?      @relation(fields: [account_id], references: [account_id], onDelete: NoAction, onUpdate: NoAction)
+  app_user_sale_agent_idToapp_user    AppUser?      @relation("sale_agent_idToapp_user", fields: [agent_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  app_user_sale_approved_byToapp_user AppUser?      @relation("sale_approved_byToapp_user", fields: [approved_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  customer                            Customer      @relation(fields: [customer_id], references: [customer_id], onDelete: NoAction, onUpdate: NoAction)
+  plot                                Plot          @relation(fields: [plot_id], references: [plot_id], onDelete: NoAction, onUpdate: NoAction)
+  title_event                         title_event[]
+
+  @@index([customer_id], map: "idx_sale_customer")
+  @@index([plot_id], map: "idx_sale_plot")
+  @@schema("sales")
+}
+
+model title_event {
+  title_event_id String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sale_id        String      @db.Uuid
+  stage          title_stage
+  event_date     DateTime    @default(dbgenerated("CURRENT_DATE")) @db.Date
+  notes          String?
+  recorded_by    String?     @db.Uuid
+  created_at     DateTime    @default(now()) @db.Timestamptz(6)
+  app_user       AppUser?    @relation(fields: [recorded_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  sale           sale        @relation(fields: [sale_id], references: [sale_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([sale_id], map: "idx_title_sale")
+  @@schema("sales")
+}
+
+enum audit_action {
+  insert
+  update
+  delete
+  status_change
+  approve
+  reject
+  login
+  override
+
+  @@schema("core")
+}
+
+enum user_status {
+  active
+  suspended
+  disabled
+
+  @@schema("core")
+}
+
+enum account_class {
+  asset
+  liability
+  equity
+  revenue
+  cogs
+  opex
+  capex
+  finance_cost
+
+  @@schema("fin")
+}
+
+enum account_status {
+  active
+  settled
+  suspended
+  closed
+
+  @@schema("fin")
+}
+
+enum account_type {
+  stand_purchase
+  agro_purchase
+  rental
+  utility
+
+  @@schema("fin")
+}
+
+enum arrears_risk {
+  current
+  d1_30
+  d31_60
+  d61_90
+  d90_plus
+
+  @@schema("fin")
+}
+
+enum asset_class {
+  residential
+  agro
+  commercial
+  utilities
+  projects
+  group
+
+  @@schema("fin")
+}
+
+enum currency_code {
+  USD
+  ZIG
+  GBP
+  ZAR
+  EUR
+  AUD
+
+  @@schema("fin")
+}
+
+enum customer_type {
+  residential_buyer
+  agro_buyer
+  tenant
+  contractor
+  other
+
+  @@schema("fin")
+}
+
+enum invoice_status {
+  draft
+  issued
+  partially_paid
+  paid
+  overdue
+  cancelled
+
+  @@schema("fin")
+}
+
+enum invoice_type {
+  instalment
+  rent
+  solar
+  water
+  fibre
+  penalty
+  other
+
+  @@schema("fin")
+}
+
+enum kyc_status {
+  pending
+  submitted
+  verified
+  rejected
+
+  @@schema("fin")
+}
+
+enum payment_method {
+  wallet
+  cash
+  bank_transfer
+  remittance
+  agent
+  merchant
+  adjustment
+
+  @@schema("fin")
+}
+
+enum period_status {
+  open
+  locked
+  closed
+
+  @@schema("fin")
+}
+
+enum txn_type {
+  debit
+  credit
+
+  @@schema("fin")
+}
+
+enum development_type {
+  residential
+  agro
+
+  @@schema("sales")
+}
+
+enum plot_status {
+  available
+  reserved
+  sold
+  transferred
+  withheld
+
+  @@schema("sales")
+}
+
+enum plot_type {
+  residential
+  hospitality
+  business
+  agro
+
+  @@schema("sales")
+}
+
+enum reservation_status {
+  active
+  converted
+  expired
+  cancelled
+
+  @@schema("sales")
+}
+
+enum sale_status {
+  pending_approval
+  active
+  cancelled
+  completed
+
+  @@schema("sales")
+}
+
+enum title_stage {
+  agreement
+  cession_prepared
+  deeds_lodged
+  title_registered
+  transferred
+
   @@schema("sales")
 }

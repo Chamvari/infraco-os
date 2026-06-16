@@ -200,17 +200,19 @@ export class CustomerService {
         phone_match: boolean;
       }[]
     >(
+      // Params cast to ::text so Postgres can infer the type of a NULL id/phone
+      // (a bare NULL parameter in `col = $n` is otherwise undeterminable → 42P08).
       `SELECT customer_id,
               first_name || ' ' || last_name AS full_name,
               id_number,
               phone,
-              similarity(first_name || ' ' || last_name, $1) AS name_sim,
-              ($2 IS NOT NULL AND id_number = $2) AS id_match,
-              ($3 IS NOT NULL AND phone = $3)     AS phone_match
+              similarity(first_name || ' ' || last_name, $1::text) AS name_sim,
+              ($2::text IS NOT NULL AND id_number = $2::text) AS id_match,
+              ($3::text IS NOT NULL AND phone = $3::text)     AS phone_match
          FROM fin.customer
-        WHERE ($2 IS NOT NULL AND id_number = $2)
-           OR ($3 IS NOT NULL AND phone = $3)
-           OR (first_name || ' ' || last_name) % $1
+        WHERE ($2::text IS NOT NULL AND id_number = $2::text)
+           OR ($3::text IS NOT NULL AND phone = $3::text)
+           OR (first_name || ' ' || last_name) % $1::text
         ORDER BY name_sim DESC NULLS LAST
         LIMIT 10`,
       fullName,
