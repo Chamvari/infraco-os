@@ -1,4 +1,11 @@
-import { Body, Controller, Headers, HttpCode, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  Post,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { Public } from '../auth/auth.decorators';
 
@@ -20,6 +27,10 @@ export class PaymentsController {
     const raw = JSON.stringify(body);
     const signatureValid = this.payments.verifySignature(raw, signature);
     const result = await this.payments.handleCallback({ ...body, signatureValid });
+    // PAY-API-008: reject an unverified callback at the HTTP boundary too.
+    if (result === 'rejected') {
+      throw new UnauthorizedException('Invalid callback signature.');
+    }
     return { result };
   }
 }

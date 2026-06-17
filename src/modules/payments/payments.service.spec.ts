@@ -160,6 +160,28 @@ describe('PaymentsService.handleCallback', () => {
 
   // -- Module D routing (UTIL-TKN-001 / UTIL-LTE-003) -------------------------
 
+  // -- PAY-API-008: signature enforcement -------------------------------------
+
+  it('rejected: an invalid signature never posts, never vends, never writes pay.callback', async () => {
+    const res = await service.handleCallback(callback({ signatureValid: false }));
+
+    expect(res).toBe('rejected');
+    expect(ledger.postPaymentTx).not.toHaveBeenCalled();
+    expect(ledger.parkSuspenseTx).not.toHaveBeenCalled();
+    expect(ledger.recomputeAccount).not.toHaveBeenCalled();
+    expect(utility.vendFromCallbackTx).not.toHaveBeenCalled();
+    expect(utility.purchaseLteFromCallbackTx).not.toHaveBeenCalled();
+    // forensic log written to pay.api_log; NEVER an insert into pay.callback
+    const insertedCallback = tx.$executeRawUnsafe.mock.calls.find((c) =>
+      String(c[0]).includes('INSERT INTO pay.callback'),
+    );
+    expect(insertedCallback).toBeUndefined();
+    const apiLog = tx.$executeRawUnsafe.mock.calls.find((c) =>
+      String(c[0]).includes('INSERT INTO pay.api_log'),
+    );
+    expect(apiLog).toBeDefined();
+  });
+
   it('utility_vend: routes to Module D, marks matched, never touches the ledger', async () => {
     const res = await service.handleCallback(
       callback({ purpose: 'utility_vend', meter_serial: 'PWR-001', bill_ref: undefined }),

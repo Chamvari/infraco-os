@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../prisma.service';
 import { LedgerService } from '../financial/ledger.service';
 import { UtilityService } from '../utility/utility.service';
@@ -87,7 +87,21 @@ export class PaymentsService {
     customer_id?: string;
     subscriber_id?: string;
     product_id?: string;
-  }): Promise<'matched' | 'duplicate' | 'unmatched'> {
+  }): Promise<'matched' | 'duplicate' | 'unmatched' | 'rejected'> {
+    // PAY-API-008: an unverified callback is NEVER acted on. We deliberately do
+    // NOT write to pay.callback here — its platform_txn_id is UNIQUE, so
+    // recording an attacker-chosen id would let a forged request pre-empt the
+    // idempotency key and permanently block the genuine payment from posting.
+    // Instead we log a payload HASH (never the raw body) to pay.api_log for
+    // forensics and reject. Fails closed: no HMAC secret configured => reject.
+    if (!payload.signatureValid) {
+      await this.logRejectedCallback(payload);
+      this.logger.warn(
+        `Rejected payment callback (txn=${payload.platform_txn_id}, channel=${payload.channel ?? 'n/a'}): invalid signature`,
+      );
+      return 'rejected';
+    }
+
     const currency = (payload.currency ?? 'USD') as CurrencyCode;
 
     // Posting runs in ONE transaction so the callback record and the ledger
@@ -226,6 +240,32 @@ export class PaymentsService {
     }
 
     return outcome.status;
+  }
+
+  /**
+   * Forensic record of a signature-rejected callback (PAY-API-008). Writes to
+   * pay.api_log, which has NO unique txn constraint, so it is safe from the
+   * idempotency-poisoning concern that rules out pay.callback. Stores only a
+   * SHA-256 of the payload — never the raw body or any secret (NFR-SEC-003).
+   */
+  private async logRejectedCallback(payload: {
+    platform_txn_id?: string;
+    channel?: string;
+  }): Promise<void> {
+    const hash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+    try {
+      await this.prisma.withActor(null, 'system', async (tx) => {
+        await tx.$executeRawUnsafe(
+          `INSERT INTO pay.api_log (direction, endpoint, correlation_id, payload_hash, http_status, status)
+           VALUES ('in', '/api/payments/callback', $1, $2, 401, 'rejected_signature')`,
+          payload.platform_txn_id ?? null,
+          hash,
+        );
+      });
+    } catch (e: unknown) {
+      // Forensic logging must never mask the security decision (still reject).
+      this.logger.error(`Failed to log rejected callback: ${String(e)}`);
+    }
   }
 
   /**
