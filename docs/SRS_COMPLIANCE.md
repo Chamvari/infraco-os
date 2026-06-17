@@ -18,7 +18,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 
 | Module | Met | Partial | Unmet | Total | **Musts met** |
 |--------|----:|--------:|------:|------:|:-------------:|
-| **A — Financial Core**        | 22 | 5  | 18 | 45 | 17 / 35 |
+| **A — Financial Core**        | 30 | 5  | 10 | 45 | 22 / 35 |
 | **B — Sales Engine**          | 8  | 14 | 9  | 31 | 7 / 19  |
 | **C — Leasing & Tenancy**     | 7  | 2  | 2  | 11 | 6 / 8   |
 | **D — Utilities**             | 9  | 9  | 15 | 33 | 9 / 17  |
@@ -28,16 +28,16 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | **H — Payments Integration**  | 1  | 5  | 2  | 8  | 1 / 6   |
 | **Z — Platform Services**     | 4  | 7  | 2  | 13 | 4 / 7   |
 | **NFRs**                      | 0  | 7  | 4  | 11 | 0 / 7   |
-| **TOTAL**                     | **51** | **70** | **78** | **202** | **44 / 133** |
+| **TOTAL**                     | **59** | **70** | **70** | **202** | **49 / 133** |
 
-- **Fully met:** 51 / 202 ≈ **25%**
-- **Met or partial:** 121 / 202 ≈ **60%**
-- **Must-have requirements fully met:** 44 / 133 ≈ **33%**
+- **Fully met:** 59 / 202 ≈ **29%**
+- **Met or partial:** 129 / 202 ≈ **64%**
+- **Must-have requirements fully met:** 49 / 133 ≈ **37%**
 
 ### Maturity by SRS phase (§3.3)
 | Phase | Modules | State |
 |-------|---------|-------|
-| 1 — revenue | A-core, B-core, H, Z-core | **Mostly built**, but H outbound + A accounting are gaps |
+| 1 — revenue | A-core, B-core, H, Z-core | **Built** — A accounting + H outbound bill push now done |
 | 2 — operations | B-full, C, D | **C done**, D prepaid done, B sales workflow incomplete |
 | 3 — customer experience | G portals | **Not started** (staff console only) |
 | 4 — development control | E, F | **Not started** (schema-only) |
@@ -52,9 +52,11 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 2. **🔴 No reservation→sale conversion (STND-SALE-002/003/004).** You can reserve
    a plot but cannot convert it to a sale, generate an agreement, or wire it to
    the instalment engine. The core sales revenue path dead-ends at reservation.
-3. **🟠 Accounting layer absent (FIN-ACC-001..010, 0/10 Musts).** Chart of
-   accounts, journal/double-entry, trial balance, P&L, balance sheet — all
-   schema-only. §2.3 flags this as a critical in-scope addition.
+3. **✅ Accounting layer built (FIN-ACC-001..009, 8/10 done).** Chart of accounts,
+   real-time double-entry posting, reversal, trial balance, P&L per asset class,
+   balance sheet, period close, CSV export all implemented and unit-tested.
+   Remaining: cash flow statement (FIN-ACC-005) and budget-vs-actuals
+   (FIN-ACC-010, blocked on Module E budgets).
 4. **🟠 Outbound bill creation is a TODO (PAY-API-001/002/004).** Bills are
    written to `pay.bill` locally but never pushed to the Payments Platform.
 5. **🟡 MFA is a passive flag (PLAT-AUTH-003).** No challenge/verification step;
@@ -68,7 +70,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 
 ## 3. Per-module detail
 
-### Module A — Financial Core  (22 Met / 5 Partial / 18 Unmet; Musts 17/35)
+### Module A — Financial Core  (30 Met / 5 Partial / 10 Unmet; Musts 22/35)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
@@ -110,16 +112,16 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | FIN-STMT-001 | Must | Unmet | fin.statement table only | No statement generation/PDF/portal |
 | FIN-STMT-002 | Should | Unmet | — | No 13-week cashflow forecast |
 | FIN-STMT-003 | Must | Unmet | — | No consolidated group revenue dashboard |
-| FIN-ACC-001 | Must | Unmet | fin.coa_account table only | No COA application code |
-| FIN-ACC-002 | Must | Unmet | fin.journal tables only | No double-entry posting code |
-| FIN-ACC-003 | Must | Unmet | — | No P&L generation |
-| FIN-ACC-004 | Should | Unmet | — | No balance sheet |
+| FIN-ACC-001 | Must | Met | accounting.service.ts:listAccounts/createAccount | COA CRUD by account_class + asset_class |
+| FIN-ACC-002 | Must | Met | accounting.service.ts:postJournalTx; ledger.service.ts:118-131,290-309; financial.service.ts:230-248 | Balanced double-entry auto-posted in real time on payment, invoice issue, adjustment/write-off (contractor cert awaits Module E) |
+| FIN-ACC-003 | Must | Met | accounting.service.ts:profitAndLoss | P&L per asset class + consolidated (rev/COGS/margin/opex/EBITDA) |
+| FIN-ACC-004 | Should | Met | accounting.service.ts:balanceSheet | Assets/liabilities/equity + retained earnings, equation checked |
 | FIN-ACC-005 | Should | Unmet | — | No cash flow statement |
-| FIN-ACC-006 | Must | Unmet | reversed_by col only | No journal-reversal code |
-| FIN-ACC-007 | Should | Unmet | fin.acc_period table only | No year-end close/period lock/trial balance |
-| FIN-ACC-008 | Should | Unmet | — | No journal export |
-| FIN-ACC-009 | Must | Unmet | — | No on-demand management accounts |
-| FIN-ACC-010 | Must | Unmet | — | No budget-vs-actuals reporting |
+| FIN-ACC-006 | Must | Met | accounting.service.ts:reverseJournal | Counter-entry only, no delete, double-reversal blocked, reversed_by linked |
+| FIN-ACC-007 | Should | Met | accounting.service.ts:closePeriod; postJournalTx period guard | Period lock + trial balance; locked/closed periods refuse posting |
+| FIN-ACC-008 | Should | Met | accounting.service.ts:exportJournalsCsv | Per-line CSV journal export |
+| FIN-ACC-009 | Must | Met | accounting.controller.ts:trial-balance/pnl/balance-sheet | Management accounts on demand for any period, filterable by asset class |
+| FIN-ACC-010 | Must | Unmet | — | Budget-vs-actuals needs Module E budgets (no app code) |
 
 ### Module B — Sales Engine  (8 Met / 14 Partial / 9 Unmet; Musts 7/19)
 
@@ -331,18 +333,19 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 
 ## 4. Recommended next build
 
-The SRS phase order prioritises **revenue** first. The single biggest revenue
-gap is that the **sales pipeline dead-ends at reservation** — Module B can
-reserve a plot but cannot convert it to a sale, generate an agreement, or hand
-off to the instalment engine that Module A *already has working*. Completing that
-loop (STND-SALE-002/003/004 → FIN-INST) makes "sell a stand and collect
-instalments" work end-to-end and is mostly *wiring existing pieces together*.
+**Done since the original scorecard** (Phase 1 revenue spine now complete):
+1. ✅ Payment-callback HMAC signature enforced (PAY-API-008).
+2. ✅ Module B reservation→sale workflow, agreement, cancellation (STND-SALE-002/003/004/005).
+3. ✅ Module H outbound bill push to the Payments Platform (PAY-API-001/002/004).
+4. ✅ Module A accounting layer (FIN-ACC-001..009): real-time double-entry posting,
+   reversal, trial balance, P&L per asset class, balance sheet, period close, CSV export.
 
-Suggested order:
-1. **Quick security fix:** enforce the payment-callback HMAC signature (PAY-API-008).
-2. **Module B sales workflow:** reservation→sale conversion, agreement/schedule
-   generation, instalment wiring, cancellation/reversal.
-3. **Module H outbound:** actually push bills to the Payments Platform (PAY-API-001/002/004).
-4. Then choose between the **accounting layer** (Module A FIN-ACC) and **customer
-   portals** (Module G) depending on whether finance/audit or customer experience
-   is the next business priority.
+**Next candidates:**
+1. **Customer portals (Module G)** — buyer/tenant self-service (0/10 Musts); the
+   biggest remaining customer-experience gap now that the back office is solid.
+2. **Read-based utility billing (FIN-UTIL-001..003, UTIL-POST)** — closes the
+   postpaid half of Module D (prepaid vending already works).
+3. **Accounting tail** — cash flow statement (FIN-ACC-005) and budget-vs-actuals
+   (FIN-ACC-010), the latter once Module E project budgets have application code.
+4. **MFA challenge (PLAT-AUTH-003)** and **DoA-rule-driven dual-auth (PLAT-AUTH-005)**
+   to harden the platform-services layer.

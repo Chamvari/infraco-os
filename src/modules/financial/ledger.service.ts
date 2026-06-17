@@ -7,6 +7,8 @@ import {
 import { PrismaService } from '../../prisma.service';
 import { CURRENCY_CODES, CurrencyCode } from '../../common/enums';
 import { arrearsBucket, ArrearsRisk } from './instalment.util';
+import { AccountingService } from './accounting.service';
+import { COA } from './coa-map';
 
 /**
  * Minimal transaction-client shape: lets ledger postings run INSIDE a caller's
@@ -66,7 +68,10 @@ export interface AccountPosition {
  */
 @Injectable()
 export class LedgerService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accounting: AccountingService,
+  ) {}
 
   /**
    * Post a payment credit to the ledger and update the invoice, INSIDE the
@@ -122,6 +127,19 @@ export class LedgerService {
       invoiceStatus,
       p.invoiceId,
     );
+
+    // FIN-ACC-002 — auto-post the double-entry journal in the same transaction:
+    // cash received, receivable cleared. Both sit in the 'group' asset class.
+    await this.accounting.postJournalTx(tx, {
+      narrative: `Payment ${ledgerId} on invoice ${p.invoiceId}`,
+      sourceTable: 'ledger_entry',
+      sourceId: ledgerId,
+      postedBy: p.postedBy ?? null,
+      lines: [
+        { coaCode: COA.CASH, debit: p.amount },
+        { coaCode: COA.RECEIVABLES, credit: p.amount },
+      ],
+    });
 
     return { ledgerId, duplicate: false, invoiceStatus };
   }
@@ -282,7 +300,30 @@ export class LedgerService {
           narrative,
           actor.actorId || null,
         );
-        return rows[0].ledger_id;
+        const newLedgerId = rows[0].ledger_id;
+
+        // FIN-ACC-002 — auto-post the matching journal. A credit (write-off /
+        // credit note) clears a receivable against operating expense; a debit
+        // (re-charge / correction) raises a receivable against interest revenue.
+        const lines =
+          p.txnType === 'credit'
+            ? [
+                { coaCode: COA.OPEX, debit: p.amount },
+                { coaCode: COA.RECEIVABLES, credit: p.amount },
+              ]
+            : [
+                { coaCode: COA.RECEIVABLES, debit: p.amount },
+                { coaCode: COA.REV_INTEREST, credit: p.amount },
+              ];
+        await this.accounting.postJournalTx(tx as TxClient, {
+          narrative: `[${p.kind}] ledger ${newLedgerId}`,
+          sourceTable: 'ledger_entry',
+          sourceId: newLedgerId,
+          postedBy: actor.actorId || null,
+          lines,
+        });
+
+        return newLedgerId;
       },
     );
 
