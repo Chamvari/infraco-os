@@ -15,7 +15,8 @@
     "start:dev": "nest start --watch",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:allocation": "jest test/allocation-lock.e2e-spec.ts --config ./test/jest-e2e.json --runInBand"
+    "test:allocation": "jest test/allocation-lock.e2e-spec.ts --config ./test/jest-e2e.json --runInBand",
+    "test:vend-idempotency": "jest test/vend-idempotency.e2e-spec.ts --config ./test/jest-e2e.json --runInBand"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
