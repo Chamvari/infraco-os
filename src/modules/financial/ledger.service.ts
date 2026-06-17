@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma.service';
 import { CURRENCY_CODES, CurrencyCode } from '../../common/enums';
 import { arrearsBucket, ArrearsRisk } from './instalment.util';
 import { AccountingService } from './accounting.service';
+import { ApprovalService } from '../approvals/approval.service';
 import { COA } from './coa-map';
 
 /**
@@ -71,6 +72,7 @@ export class LedgerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accounting: AccountingService,
+    private readonly approvals: ApprovalService,
   ) {}
 
   /**
@@ -234,10 +236,14 @@ export class LedgerService {
 
   /**
    * FIN-LED-005 — post a manual ledger adjustment (credit note / write-off).
-   * Requires DUAL AUTHORISATION: a second authoriser distinct from the actor;
-   * write-offs additionally require a Finance Manager authoriser (FIN-ARR-004).
-   * The write is audited (core.capture_audit via withActor); the authoriser is
-   * recorded on the entry.
+   * Dual authorisation is governed by the SINGLE authoritative mechanism: the
+   * Delegation-of-Authority workflow (PLAT-AUTH-005). The DoA matrix decides,
+   * per (action_code, currency, amount), whether two distinct signatories are
+   * required; if so, the adjustment cannot post until an approval has been
+   * initiated and approved by a different user, and its approvalId is supplied
+   * here. The approval is consumed (executed) atomically so it authorises
+   * exactly one posting. Below-threshold adjustments post directly. The write is
+   * audited (core.capture_audit via withActor).
    */
   async postManualAdjustment(
     p: {
@@ -248,8 +254,8 @@ export class LedgerService {
       kind: 'credit_note' | 'write_off' | 'correction';
       currency?: CurrencyCode;
       narrative: string;
-      authoriserId: string;
-      authoriserRole: string;
+      /** An approved core.approval_request id; required when the amount exceeds the DoA threshold. */
+      approvalId?: string;
     },
     actor: Actor,
   ): Promise<{ ledgerId: string }> {
@@ -264,24 +270,43 @@ export class LedgerService {
       throw new BadRequestException(`Invalid currency '${currency}'.`);
     }
 
-    // Dual authorisation (FIN-LED-005).
-    if (!p.authoriserId || p.authoriserId.trim() === '') {
-      throw new ForbiddenException(
-        'A second authoriser is required for manual ledger adjustments.',
-      );
-    }
-    if (p.authoriserId === actor.actorId) {
-      throw new ForbiddenException(
-        'Dual authorisation requires a different second authoriser.',
-      );
-    }
-    if (p.kind === 'write_off' && p.authoriserRole !== 'finance_mgr') {
-      throw new ForbiddenException(
-        'Write-offs must be authorised by a Finance Manager (FIN-ARR-004).',
-      );
+    // Delegation-of-Authority (PLAT-AUTH-005) — the one governing dual-auth path.
+    // Write-offs map to 'ledger.writeoff' (seeded to require dual auth at any
+    // amount, preserving FIN-ARR-004's senior sign-off); other adjustments map
+    // to 'ledger.adjustment' (dual auth only above its configured threshold).
+    const actionCode =
+      p.kind === 'write_off' ? 'ledger.writeoff' : 'ledger.adjustment';
+    const decision = await this.approvals.requiresApproval(
+      actionCode,
+      p.amount,
+      currency,
+    );
+
+    let approvalNote = 'doa=not_required';
+    if (decision.required) {
+      if (!p.approvalId) {
+        throw new ForbiddenException(
+          `Dual authorisation is required for this ${p.kind} (threshold ${decision.threshold ?? 'any'} ${currency}). ` +
+            'Initiate one via POST /approvals, have a distinct second signatory approve it, then post with its approvalId.',
+        );
+      }
+      // Consume the approval: verifies it is 'approved' (a distinct second
+      // signatory approved it) and marks it executed atomically — so one
+      // approval authorises exactly one posting. Throws if it is not approved.
+      const { record } = await this.approvals.execute(p.approvalId, actor);
+      if (
+        record.actionCode !== actionCode ||
+        record.amount !== p.amount ||
+        record.currency !== currency
+      ) {
+        throw new ForbiddenException(
+          'The supplied approval does not match this adjustment (action/amount/currency mismatch).',
+        );
+      }
+      approvalNote = `approval=${p.approvalId}`;
     }
 
-    const narrative = `[${p.kind}] ${p.narrative} (posted_by=${actor.actorId}; authorised_by=${p.authoriserId})`;
+    const narrative = `[${p.kind}] ${p.narrative} (posted_by=${actor.actorId}; ${approvalNote})`;
 
     const ledgerId = await this.prisma.withActor(
       actor.actorId,

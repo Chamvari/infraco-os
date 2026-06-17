@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { AuthModule } from './modules/auth/auth.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { AccountModule } from './modules/account/account.module';
@@ -11,9 +12,20 @@ import { LeaseModule } from './modules/lease/lease.module';
 import { ArrearsModule } from './modules/financial/arrears.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { UtilityModule } from './modules/utility/utility.module';
+import { ApprovalModule } from './modules/approvals/approval.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
+    // Redis-backed job queue (SMS delivery, future billing/utility events).
+    // Connection is read from process.env directly (no @nestjs/config), matching
+    // the rest of the codebase. Defaults to localhost for dev.
+    BullModule.forRoot({
+      connection: {
+        url: process.env.REDIS_URL ?? 'redis://localhost:6379',
+        retryStrategy: (times: number) => Math.min(times * 500, 5000),
+      },
+    }),
     AuthModule,
     CustomerModule,
     AccountModule,
@@ -26,6 +38,8 @@ import { UtilityModule } from './modules/utility/utility.module';
     ArrearsModule,
     OnboardingModule,
     UtilityModule,
+    ApprovalModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

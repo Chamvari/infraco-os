@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { LedgerService } from './ledger.service';
 import { AccountingService } from './accounting.service';
+import { ApprovalService } from '../approvals/approval.service';
 import { PrismaService } from '../../prisma.service';
 
 /**
@@ -16,6 +17,7 @@ describe('LedgerService', () => {
   let tx: { $queryRawUnsafe: jest.Mock; $executeRawUnsafe: jest.Mock };
   let prisma: { $queryRawUnsafe: jest.Mock; withActor: jest.Mock };
   let accounting: { postJournalTx: jest.Mock };
+  let approvals: { requiresApproval: jest.Mock; execute: jest.Mock };
 
   const actor = { actorId: 'user-1', actorRole: 'finance' };
 
@@ -31,9 +33,19 @@ describe('LedgerService', () => {
       ),
     };
     accounting = { postJournalTx: jest.fn().mockResolvedValue({ journalId: 'jrnl-1' }) };
+    // DoA workflow (PLAT-AUTH-005) — the single governing dual-auth mechanism.
+    // Default: no approval required (below threshold) so non-adjustment tests are
+    // unaffected; the postManualAdjustment block overrides per case.
+    approvals = {
+      requiresApproval: jest
+        .fn()
+        .mockResolvedValue({ required: false, threshold: null, ruleId: null }),
+      execute: jest.fn(),
+    };
     service = new LedgerService(
       prisma as unknown as PrismaService,
       accounting as unknown as AccountingService,
+      approvals as unknown as ApprovalService,
     );
   });
 
@@ -175,67 +187,135 @@ describe('LedgerService', () => {
     });
   });
 
-  describe('postManualAdjustment (dual authorisation, FIN-LED-005)', () => {
+  describe('postManualAdjustment (DoA dual authorisation, FIN-LED-005 / PLAT-AUTH-005)', () => {
     const base = {
       accountId: 'acc-1',
       txnType: 'credit' as const,
       amount: 100,
       kind: 'credit_note' as const,
       narrative: 'goodwill',
-      authoriserId: 'user-2',
-      authoriserRole: 'finance_mgr',
     };
 
-    it('posts a dual-authorised credit note and recomputes', async () => {
+    // An executed approval record matching the adjustment below.
+    const matchingApproval = (over: Record<string, unknown> = {}) => ({
+      record: {
+        approvalId: 'appr-1',
+        actionCode: 'ledger.adjustment',
+        amount: 6000,
+        currency: 'USD',
+        status: 'executed',
+        ...over,
+      },
+      payload: null,
+    });
+
+    it('posts a below-threshold adjustment directly, with no approval needed', async () => {
+      approvals.requiresApproval.mockResolvedValue({
+        required: false,
+        threshold: 5000,
+        ruleId: 'rule-1',
+      });
       jest.spyOn(service, 'recomputeAccount').mockResolvedValue({} as never);
       tx.$queryRawUnsafe.mockResolvedValueOnce([{ ledger_id: '50' }]);
 
       const res = await service.postManualAdjustment(base, actor);
 
       expect(res).toEqual({ ledgerId: '50' });
+      expect(approvals.requiresApproval).toHaveBeenCalledWith('ledger.adjustment', 100, 'USD');
+      expect(approvals.execute).not.toHaveBeenCalled();
       const ins = tx.$queryRawUnsafe.mock.calls[0];
       expect(String(ins[0])).toContain('INSERT INTO fin.ledger_entry');
       expect(String(ins[6])).toContain('[credit_note]');
-      expect(String(ins[6])).toContain('authorised_by=user-2');
+      expect(String(ins[6])).toContain('doa=not_required');
       expect(service.recomputeAccount).toHaveBeenCalledWith('acc-1', actor);
     });
 
-    it('rejects when no second authoriser is supplied', async () => {
+    it('blocks a high-value adjustment that has no approval', async () => {
+      approvals.requiresApproval.mockResolvedValue({
+        required: true,
+        threshold: 5000,
+        ruleId: 'rule-1',
+      });
       await expect(
-        service.postManualAdjustment({ ...base, authoriserId: '' }, actor),
+        service.postManualAdjustment({ ...base, amount: 6000 }, actor),
       ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(approvals.execute).not.toHaveBeenCalled();
       expect(prisma.withActor).not.toHaveBeenCalled();
     });
 
-    it('rejects when the authoriser is the same person as the actor', async () => {
-      await expect(
-        service.postManualAdjustment({ ...base, authoriserId: 'user-1' }, actor),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    });
-
-    it('requires a Finance Manager to authorise a write-off', async () => {
-      await expect(
-        service.postManualAdjustment(
-          { ...base, kind: 'write_off', authoriserRole: 'finance' },
-          actor,
-        ),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    });
-
-    it('allows a write-off authorised by a Finance Manager', async () => {
+    it('consumes an approved approval and posts a high-value adjustment', async () => {
+      approvals.requiresApproval.mockResolvedValue({
+        required: true,
+        threshold: 5000,
+        ruleId: 'rule-1',
+      });
+      approvals.execute.mockResolvedValue(matchingApproval());
       jest.spyOn(service, 'recomputeAccount').mockResolvedValue({} as never);
-      tx.$queryRawUnsafe.mockResolvedValueOnce([{ ledger_id: '51' }]);
+      tx.$queryRawUnsafe.mockResolvedValueOnce([{ ledger_id: '60' }]);
+
       const res = await service.postManualAdjustment(
-        { ...base, kind: 'write_off', authoriserRole: 'finance_mgr' },
+        { ...base, amount: 6000, approvalId: 'appr-1' },
         actor,
       );
-      expect(res.ledgerId).toBe('51');
+
+      expect(res).toEqual({ ledgerId: '60' });
+      expect(approvals.execute).toHaveBeenCalledWith('appr-1', actor);
+      const ins = tx.$queryRawUnsafe.mock.calls[0];
+      expect(String(ins[6])).toContain('approval=appr-1');
     });
 
-    it('rejects a non-positive amount', async () => {
+    it('routes write-offs through the ledger.writeoff DoA rule', async () => {
+      approvals.requiresApproval.mockResolvedValue({
+        required: true,
+        threshold: 0,
+        ruleId: 'rule-2',
+      });
+      approvals.execute.mockResolvedValue(
+        matchingApproval({ actionCode: 'ledger.writeoff', amount: 6000 }),
+      );
+      jest.spyOn(service, 'recomputeAccount').mockResolvedValue({} as never);
+      tx.$queryRawUnsafe.mockResolvedValueOnce([{ ledger_id: '61' }]);
+
+      const res = await service.postManualAdjustment(
+        { ...base, kind: 'write_off', amount: 6000, approvalId: 'appr-1' },
+        actor,
+      );
+
+      expect(res.ledgerId).toBe('61');
+      expect(approvals.requiresApproval).toHaveBeenCalledWith('ledger.writeoff', 6000, 'USD');
+    });
+
+    it('rejects an approval that does not match the adjustment', async () => {
+      approvals.requiresApproval.mockResolvedValue({
+        required: true,
+        threshold: 5000,
+        ruleId: 'rule-1',
+      });
+      // Approval was for a different amount → mismatch.
+      approvals.execute.mockResolvedValue(matchingApproval({ amount: 9999 }));
+      await expect(
+        service.postManualAdjustment({ ...base, amount: 6000, approvalId: 'appr-1' }, actor),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('propagates the guard when the approval is not approved', async () => {
+      approvals.requiresApproval.mockResolvedValue({
+        required: true,
+        threshold: 5000,
+        ruleId: 'rule-1',
+      });
+      // execute() refuses a non-approved request (unapproved cannot execute).
+      approvals.execute.mockRejectedValue(new ForbiddenException('not approved'));
+      await expect(
+        service.postManualAdjustment({ ...base, amount: 6000, approvalId: 'appr-1' }, actor),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('rejects a non-positive amount before any DoA lookup', async () => {
       await expect(
         service.postManualAdjustment({ ...base, amount: 0 }, actor),
       ).rejects.toBeInstanceOf(BadRequestException);
+      expect(approvals.requiresApproval).not.toHaveBeenCalled();
     });
   });
 
