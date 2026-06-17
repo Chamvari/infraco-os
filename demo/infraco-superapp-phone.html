@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#00894F">
+<title>InfraCo — Resident App</title>
+<style>
+  :root{
+    --emerald:#00B96B; --emerald-d:#00894F; --emerald-l:#E6FAF0;
+    --teal:#0FB5BA; --teal-d:#0A7E82; --teal-l:#E0F8F9;
+    --indigo:#3D4EE8; --indigo-d:#2536B8; --indigo-l:#ECEEFE;
+    --gold:#FFB020; --gold-d:#C77F00; --gold-l:#FFF6E5;
+    --sky:#1E9BF0; --sky-d:#0B6FC2; --sky-l:#E5F3FE;
+    --coral:#FF5A5F; --coral-d:#D83A3F; --coral-l:#FFE8E9;
+    --ink:#0E1726; --slate:#5A6679; --mist:#8A93A3;
+    --line:#E8ECF2; --bg:#F4F7FB; --white:#fff;
+    --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{font-family:var(--font);background:#0E1726;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5;overflow:hidden}
+
+  /* full-screen app shell, max 480 so it looks right on tablets/desktop too */
+  .device{max-width:480px;margin:0 auto;height:100vh;height:100dvh;background:var(--white);display:flex;flex-direction:column;position:relative;overflow:hidden}
+
+  .scr{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none}
+  .scr.on{display:block;animation:fade .3s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* hero */
+  .hero{background:linear-gradient(150deg,var(--emerald-d),var(--teal));padding:calc(env(safe-area-inset-top) + 22px) 22px 28px;color:#fff}
+  .hero-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+  .hero-brand{display:flex;gap:9px;align-items:center}
+  .hero-logo{width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:17px}
+  .bal-lab{font-size:13px;color:#A6F0D5}
+  .bal{font-size:42px;font-weight:800;letter-spacing:-1.5px;margin:3px 0 5px}
+  .bal-sub{font-size:13px;color:#A6F0D5}
+
+  .quick{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:20px 18px}
+  .qa{text-align:center;cursor:pointer}
+  .qa .ico{width:58px;height:58px;margin:0 auto 6px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:25px;transition:.15s}
+  .qa:active .ico{transform:scale(.92)}
+  .qa .lb{font-size:11px;color:var(--slate);font-weight:600}
+
+  .sec-lab{font-size:12px;font-weight:700;color:var(--slate);padding:4px 20px 10px;text-transform:uppercase;letter-spacing:.5px}
+  .meter{margin:0 18px 12px;border:1px solid var(--line);border-radius:14px;padding:15px}
+  .meter-top{display:flex;justify-content:space-between;font-size:14px;margin-bottom:9px}
+  .bar{height:7px;background:var(--bg);border-radius:5px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:5px}
+  .meter-sub{font-size:11px;color:var(--mist);margin-top:7px}
+
+  .bill{margin:0 18px;display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--line)}
+  .bill:last-child{border:none}
+  .bill-l{display:flex;gap:11px;align-items:center}
+  .bill-ico{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px}
+
+  /* bottom tab bar */
+  .tabs{display:flex;justify-content:space-around;padding:10px 0 calc(env(safe-area-inset-bottom) + 10px);border-top:1px solid var(--line);background:#fff}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-size:10px;color:var(--mist);font-weight:600;flex:1;padding:4px 0}
+  .tab .ti{font-size:23px}
+  .tab.on{color:var(--emerald)}
+
+  /* generic sheet pages (power, data, pay) */
+  .page-hd{padding:calc(env(safe-area-inset-top) + 18px) 20px 18px;color:#fff;display:flex;align-items:center;gap:12px}
+  .back{font-size:22px;cursor:pointer;width:30px}
+  .page-hd h2{font-size:19px;font-weight:800}
+  .pbody{padding:20px}
+  .opt{border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:.15s}
+  .opt:active{transform:scale(.98);border-color:var(--emerald)}
+  .opt .ot{font-size:15px;font-weight:700} .opt .od{font-size:12px;color:var(--mist);margin-top:2px}
+  .opt .op{font-size:17px;font-weight:800;color:var(--emerald-d)}
+  .amt-in{width:100%;padding:16px;border:2px solid var(--line);border-radius:14px;font-size:22px;font-weight:700;text-align:center;font-family:inherit;margin-bottom:16px}
+  .btn{width:100%;border:none;border-radius:14px;padding:16px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,var(--emerald),var(--teal));color:#fff}
+  .btn:active{transform:scale(.98)}
+
+  .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:14px 20px;border-radius:14px;font-size:13px;font-weight:500;max-width:300px;text-align:center;opacity:0;transition:.3s;z-index:100;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* explore other surfaces */
+  .explore{padding:20px}
+  .ex-card{border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:.15s}
+  .ex-card:active{transform:scale(.98)}
+  .ex-ico{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+  .ex-t{font-size:15px;font-weight:700} .ex-d{font-size:12px;color:var(--mist);margin-top:2px}
+  .note{background:var(--gold-l);color:var(--gold-d);font-size:12px;padding:13px;border-radius:12px;margin-top:6px}
+
+  .demo-tag{position:fixed;top:calc(env(safe-area-inset-top) + 8px);right:8px;background:rgba(14,23,38,.6);color:#fff;font-size:9px;font-weight:600;padding:4px 9px;border-radius:20px;z-index:90}
+
+  /* incoming SMS banner */
+  .sms-pop{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 10px);transform:translateX(-50%) translateY(-160%);width:calc(100% - 24px);max-width:440px;background:rgba(245,247,250,.97);backdrop-filter:blur(10px);border-radius:16px;padding:13px 15px;z-index:120;box-shadow:0 8px 30px rgba(0,0,0,.25);transition:transform .4s cubic-bezier(.2,.9,.3,1.2);display:flex;gap:12px;align-items:flex-start}
+  .sms-pop.show{transform:translateX(-50%) translateY(0)}
+  .sms-ico{width:38px;height:38px;border-radius:9px;background:var(--emerald);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+  .sms-from{font-size:12px;font-weight:700;color:var(--ink);display:flex;justify-content:space-between}
+  .sms-from span{font-size:10px;color:var(--mist);font-weight:500}
+  .sms-body{font-size:12px;color:var(--slate);margin-top:2px;line-height:1.45}
+
+  /* notifications inbox */
+  .notif{display:flex;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .notif-ico{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+  .notif-t{font-size:14px;font-weight:600} .notif-b{font-size:12px;color:var(--slate);margin-top:2px;line-height:1.45} .notif-time{font-size:10px;color:var(--mist);margin-top:4px}
+  .ch-pill{font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--emerald-l);color:var(--emerald-d);margin-left:6px}
+  .ch-pill.push{background:var(--sky-l);color:var(--sky-d)}
+</style>
+</head>
+<body>
+<div class="device">
+
+  <!-- HOME -->
+  <div class="scr on" id="home">
+    <div class="hero">
+      <div class="hero-top"><div class="hero-brand"><div class="hero-logo">🏗️</div><b style="font-size:15px">InfraCo</b></div><span style="font-size:19px">🔔</span></div>
+      <div class="bal-lab">Wallet balance</div>
+      <div class="bal">$45.80</div>
+      <div class="bal-sub">Tendai Moyo · Stand KW-1842</div>
+    </div>
+    <div class="quick">
+      <div class="qa" onclick="show('power')"><div class="ico" style="background:var(--gold-l);color:var(--gold-d)">⚡</div><div class="lb">Buy power</div></div>
+      <div class="qa" onclick="show('data')"><div class="ico" style="background:var(--sky-l);color:var(--sky-d)">📶</div><div class="lb">Data</div></div>
+      <div class="qa" onclick="show('pay')"><div class="ico" style="background:var(--emerald-l);color:var(--emerald-d)">💵</div><div class="lb">Pay bill</div></div>
+      <div class="qa" onclick="toast('Top-up options: EcoCash, card, or bank transfer.')"><div class="ico" style="background:var(--indigo-l);color:var(--indigo-d)">➕</div><div class="lb">Top up</div></div>
+    </div>
+    <div class="sec-lab">My utilities</div>
+    <div class="meter">
+      <div class="meter-top"><span style="color:var(--slate)">⚡ Power meter</span><b>12.4 kWh</b></div>
+      <div class="bar"><i style="width:31%;background:var(--gold)"></i></div>
+      <div class="meter-sub">~3 days left · meter 37-4192-8810</div>
+    </div>
+    <div class="meter">
+      <div class="meter-top"><span style="color:var(--slate)">📶 Easy Mobile data</span><b>1.2 GB</b></div>
+      <div class="bar"><i style="width:60%;background:var(--sky)"></i></div>
+      <div class="meter-sub">Monthly 2GB · renews Jun 30</div>
+    </div>
+    <div class="sec-lab" style="padding-top:14px">This month</div>
+    <div style="padding-bottom:18px">
+      <div class="bill"><div class="bill-l"><div class="bill-ico" style="background:var(--bg)">🏠</div><div><div style="font-size:14px;font-weight:600">Stand instalment</div><div style="font-size:11px;color:var(--mist)">Due Jun 25 · 14 of 48</div></div></div><b style="font-size:14px">$320.00</b></div>
+      <div class="bill"><div class="bill-l"><div class="bill-ico" style="background:var(--emerald-l)">✅</div><div><div style="font-size:14px;font-weight:600">Power token</div><div style="font-size:11px;color:var(--mist)">Jun 14 · 40 kWh</div></div></div><b style="font-size:14px;color:var(--emerald-d)">$15.00</b></div>
+      <div class="bill"><div class="bill-l"><div class="bill-ico" style="background:var(--sky-l)">📶</div><div><div style="font-size:14px;font-weight:600">Data bundle</div><div style="font-size:11px;color:var(--mist)">Jun 1 · Monthly 2GB</div></div></div><b style="font-size:14px;color:var(--emerald-d)">$7.00</b></div>
+    </div>
+  </div>
+
+  <!-- BUY POWER -->
+  <div class="scr" id="power">
+    <div class="hero" style="padding-bottom:18px"><div class="page-hd" style="padding:0;color:#fff"><span class="back" onclick="show('home')">←</span><h2>Buy electricity</h2></div><div style="color:#A6F0D5;font-size:13px;margin-top:6px">Meter 37-4192-8810 · 12.4 kWh left</div></div>
+    <div class="pbody">
+      <div class="sec-lab" style="padding:0 0 12px">Quick amounts</div>
+      <div class="opt" onclick="buyPower(5,50)"><div><div class="ot">$5.00</div><div class="od">≈ 50 kWh</div></div><span style="font-size:20px;color:var(--mist)">›</span></div>
+      <div class="opt" onclick="buyPower(15,150)"><div><div class="ot">$15.00</div><div class="od">≈ 150 kWh · popular</div></div><span style="font-size:20px;color:var(--mist)">›</span></div>
+      <div class="opt" onclick="buyPower(30,300)"><div><div class="ot">$30.00</div><div class="od">≈ 300 kWh</div></div><span style="font-size:20px;color:var(--mist)">›</span></div>
+      <div class="sec-lab" style="padding:14px 0 12px">Or enter amount</div>
+      <input class="amt-in" id="pAmt" type="number" placeholder="$0.00" inputmode="decimal">
+      <button class="btn" onclick="buyPowerCustom()">Buy token</button>
+    </div>
+  </div>
+
+  <!-- DATA -->
+  <div class="scr" id="data">
+    <div class="hero" style="background:linear-gradient(150deg,var(--sky-d),var(--indigo));padding-bottom:18px"><div class="page-hd" style="padding:0;color:#fff"><span class="back" onclick="show('home')">←</span><h2>Easy Mobile data</h2></div><div style="color:#CDE6FF;font-size:13px;margin-top:6px">1.2 GB remaining · renews Jun 30</div></div>
+    <div class="pbody">
+      <div class="sec-lab" style="padding:0 0 12px">Choose a bundle</div>
+      <div class="opt" onclick="buyData('Daily 100MB',0.5)"><div><div class="ot">Daily · 100 MB</div><div class="od">24 hours</div></div><span class="op">$0.50</span></div>
+      <div class="opt" onclick="buyData('Weekly 500MB',2)"><div><div class="ot">Weekly · 500 MB</div><div class="od">7 days</div></div><span class="op">$2.00</span></div>
+      <div class="opt" onclick="buyData('Monthly 2GB',7)"><div><div class="ot">Monthly · 2 GB</div><div class="od">30 days · popular</div></div><span class="op">$7.00</span></div>
+      <div class="opt" onclick="buyData('Monthly 5GB',15)"><div><div class="ot">Monthly · 5 GB</div><div class="od">30 days</div></div><span class="op">$15.00</span></div>
+    </div>
+  </div>
+
+  <!-- PAY BILL -->
+  <div class="scr" id="pay">
+    <div class="hero" style="padding-bottom:18px"><div class="page-hd" style="padding:0;color:#fff"><span class="back" onclick="show('home')">←</span><h2>Pay instalment</h2></div><div style="color:#A6F0D5;font-size:13px;margin-top:6px">Stand KW-1842 · instalment 14 of 48</div></div>
+    <div class="pbody">
+      <div style="border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:18px">
+        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px"><span style="color:var(--slate)">Amount due</span><b>$320.00</b></div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px"><span style="color:var(--slate)">Due date</span><b>Jun 25, 2026</b></div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;border-top:1px solid var(--line)"><span style="color:var(--slate)">Remaining balance</span><b>$10,880</b></div>
+      </div>
+      <div class="sec-lab" style="padding:0 0 12px">Pay with</div>
+      <div class="opt" onclick="payBill('EcoCash')"><div><div class="ot">EcoCash</div><div class="od">+263 77••• ••842</div></div><span style="font-size:20px;color:var(--mist)">›</span></div>
+      <div class="opt" onclick="payBill('Wallet balance')"><div><div class="ot">InfraCo wallet</div><div class="od">$45.80 available</div></div><span style="font-size:20px;color:var(--mist)">›</span></div>
+      <div class="opt" onclick="payBill('Card')"><div><div class="ot">Debit / credit card</div><div class="od">Visa ••• 4127</div></div><span style="font-size:20px;color:var(--mist)">›</span></div>
+    </div>
+  </div>
+
+  <!-- NOTIFICATIONS INBOX -->
+  <div class="scr" id="alerts">
+    <div class="hero" style="background:linear-gradient(150deg,var(--emerald-d),var(--teal));padding-bottom:20px">
+      <div class="hero-top"><div class="hero-brand"><div class="hero-logo">🔔</div><b style="font-size:15px">Notifications</b></div></div>
+      <div style="font-size:20px;font-weight:800;margin-top:8px">Your alerts</div>
+      <div style="font-size:13px;color:#A6F0D5;margin-top:4px">SMS & app notifications</div>
+    </div>
+    <div id="notifList">
+      <div class="notif"><div class="notif-ico" style="background:var(--gold-l)">⚡</div><div><div class="notif-t">Power running low<span class="ch-pill">SMS</span></div><div class="notif-b">Meter 37-4192-8810 has 12.4 kWh left (~3 days). Top up via the app or *384*57#.</div><div class="notif-time">Today · 08:14</div></div></div>
+      <div class="notif"><div class="notif-ico" style="background:var(--emerald-l)">✅</div><div><div class="notif-t">Payment received<span class="ch-pill">SMS</span></div><div class="notif-b">Power token: 40 kWh for $15.00. Token sent to your phone. Thank you.</div><div class="notif-time">Jun 14 · 16:32</div></div></div>
+      <div class="notif"><div class="notif-ico" style="background:var(--sky-l)">📶</div><div><div class="notif-t">Data bundle active<span class="ch-pill push">App</span></div><div class="notif-b">Your Monthly 2GB bundle is active and renews Jun 30.</div><div class="notif-time">Jun 1 · 09:05</div></div></div>
+      <div class="notif"><div class="notif-ico" style="background:var(--bg)">🏠</div><div><div class="notif-t">Instalment reminder<span class="ch-pill">SMS</span></div><div class="notif-b">$320.00 due Jun 25 for stand KW-1842. Pay via EcoCash *151# or the InfraCo app.</div><div class="notif-time">May 30 · 07:00</div></div></div>
+    </div>
+  </div>
+
+  <!-- EXPLORE (other surfaces) -->
+  <div class="scr" id="explore">
+    <div class="hero" style="background:linear-gradient(150deg,var(--indigo-d),#6B4EE8);padding-bottom:22px">
+      <div class="hero-top"><div class="hero-brand"><div class="hero-logo">🏗️</div><b style="font-size:15px">InfraCo OS</b></div></div>
+      <div style="font-size:20px;font-weight:800;margin-top:8px">The whole platform</div>
+      <div style="font-size:13px;color:#CDD2FF;margin-top:4px">One system — every role, every channel</div>
+    </div>
+    <div class="explore">
+      <div class="ex-card" onclick="toast('Resident app — you are viewing it now.')"><div class="ex-ico" style="background:var(--teal-l)">📱</div><div><div class="ex-t">Resident Super-App</div><div class="ex-d">Wallet, power, data, bills — this app</div></div></div>
+      <div class="ex-card" onclick="toast('Staff use the ops dashboard: collections, approvals, live utilities.')"><div class="ex-ico" style="background:var(--emerald-l)">📊</div><div><div class="ex-t">Staff operations</div><div class="ex-d">Estate managers & finance</div></div></div>
+      <div class="ex-card" onclick="toast('Interactive site map: pick a stand, reserve it, watch it update live.')"><div class="ex-ico" style="background:var(--gold-l)">🗺️</div><div><div class="ex-t">Site map & sales</div><div class="ex-d">Browse and reserve stands</div></div></div>
+      <div class="ex-card" onclick="toast('Tenant portal for commercial & residential leases.')"><div class="ex-ico" style="background:var(--sky-l)">🏢</div><div><div class="ex-t">Tenant portal</div><div class="ex-d">Lease, rent & obligations</div></div></div>
+      <div class="ex-card" onclick="toast('Contractor portal: work packages & payment certificates.')"><div class="ex-ico" style="background:var(--coral-l)">🏗️</div><div><div class="ex-t">Contractor portal</div><div class="ex-d">Build progress & certificates</div></div></div>
+      <div class="ex-card" onclick="toast('USSD works on any phone — dial *384*57# with no internet.')"><div class="ex-ico" style="background:var(--bg)">📟</div><div><div class="ex-t">USSD — feature phones</div><div class="ex-d">Reaches every resident</div></div></div>
+      <div class="note">This phone demo shows the resident Super-App. The full platform — board view, compliance, all surfaces — runs on the desktop demo.</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab on" id="t-home" onclick="show('home')"><span class="ti">🏠</span>Home</div>
+    <div class="tab" id="t-power" onclick="show('power')"><span class="ti">⚡</span>Power</div>
+    <div class="tab" id="t-alerts" onclick="show('alerts')"><span class="ti">🔔</span>Alerts</div>
+    <div class="tab" id="t-explore" onclick="show('explore')"><span class="ti">⊞</span>Explore</div>
+  </div>
+
+</div>
+<div class="demo-tag">● Demo</div>
+<div class="toast" id="toast"></div>
+<div class="sms-pop" id="smsPop"><div class="sms-ico">💬</div><div style="flex:1"><div class="sms-from">InfraCo <span id="smsTime">now</span></div><div class="sms-body" id="smsBody"></div></div></div>
+
+<script>
+function show(id){
+  document.querySelectorAll('.scr').forEach(e=>e.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  const tabMap={home:'t-home',power:'t-power',alerts:'t-alerts',explore:'t-explore'};
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  if(tabMap[id])document.getElementById(tabMap[id]).classList.add('on');
+  document.querySelector('.scr.on').scrollTop=0;
+}
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),3200);
+}
+let smsTimer;
+function sms(body){
+  const p=document.getElementById('smsPop');
+  document.getElementById('smsBody').textContent=body;
+  document.getElementById('smsTime').textContent='now';
+  p.classList.add('show');
+  clearTimeout(smsTimer);
+  smsTimer=setTimeout(()=>p.classList.remove('show'),5000);
+}
+function buyPower(usd,kwh){
+  toast('Token purchased — '+kwh+' kWh');
+  setTimeout(()=>show('home'),700);
+  setTimeout(()=>sms('Power token: '+kwh+' kWh for $'+usd.toFixed(2)+'. Token: 4821 7733 0192 5567. Meter 37-4192-8810.'),1100);
+}
+function buyPowerCustom(){
+  const v=parseFloat(document.getElementById('pAmt').value);
+  if(!v||v<1){toast('Enter at least $1.00');return;}
+  document.getElementById('pAmt').value='';
+  buyPower(v,Math.round(v*10));
+}
+function buyData(name,usd){
+  toast(name+' activated');
+  setTimeout(()=>show('home'),700);
+  setTimeout(()=>sms('Easy Mobile: '+name+' activated for $'+usd.toFixed(2)+'. Enjoy your data.'),1100);
+}
+function payBill(method){
+  toast('$320.00 paid via '+method);
+  setTimeout(()=>show('home'),800);
+  setTimeout(()=>sms('Payment received: $320.00 for stand KW-1842 via '+method+'. Ref INV-0614. Balance: $10,880. Thank you.'),1200);
+}
+</script>
+</body>
+</html>

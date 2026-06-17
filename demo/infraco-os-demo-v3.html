@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InfraCo OS — Platform Demo</title>
+<style>
+  :root{
+    --emerald:#00B96B; --emerald-d:#00894F; --emerald-l:#E6FAF0;
+    --teal:#0FB5BA; --teal-d:#0A7E82; --teal-l:#E0F8F9;
+    --indigo:#3D4EE8; --indigo-d:#2536B8; --indigo-l:#ECEEFE;
+    --gold:#FFB020; --gold-d:#C77F00; --gold-l:#FFF6E5;
+    --sky:#1E9BF0; --sky-d:#0B6FC2; --sky-l:#E5F3FE;
+    --coral:#FF5A5F; --coral-d:#D83A3F; --coral-l:#FFE8E9;
+    --ink:#0E1726; --slate:#5A6679; --mist:#8A93A3;
+    --line:#E8ECF2; --bg:#F4F7FB; --white:#fff;
+    --r:14px; --rs:10px; --rl:20px;
+    --sh:0 2px 8px rgba(14,23,38,.06); --shl:0 8px 30px rgba(14,23,38,.10);
+    --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
+
+  /* ---------- LOGIN ---------- */
+  #login{position:fixed;inset:0;z-index:200;background:linear-gradient(135deg,#0E1726 0%,#16243B 55%,#0A3D34 100%);display:flex;align-items:center;justify-content:center;padding:20px}
+  #login .glow{position:absolute;border-radius:50%;filter:blur(80px);opacity:.35}
+  .login-card{position:relative;width:100%;max-width:440px;text-align:center;color:#fff;z-index:2}
+  .login-logo{width:60px;height:60px;border-radius:18px;background:linear-gradient(135deg,var(--emerald),var(--teal));display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 18px;box-shadow:0 8px 26px rgba(0,185,107,.5)}
+  .login-card h1{font-size:28px;font-weight:800;letter-spacing:-.6px}
+  .login-card .tag{font-size:14px;color:#8FA0B8;margin:6px 0 30px}
+  .role-pick{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:#5C6A82;font-weight:700;margin-bottom:14px}
+  .roles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .role{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:var(--r);padding:18px 16px;cursor:pointer;transition:.18s;text-align:left}
+  .role:hover{background:rgba(255,255,255,.1);transform:translateY(-2px);border-color:rgba(0,185,107,.5)}
+  .role .ri{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px}
+  .role .rt{font-size:15px;font-weight:700}
+  .role .rd{font-size:11px;color:#8FA0B8;margin-top:2px}
+  .login-foot{margin-top:26px;font-size:12px;color:#5C6A82;display:flex;align-items:center;justify-content:center;gap:6px}
+
+  /* ---------- APP SHELL ---------- */
+  .app{display:none;min-height:100vh}
+  .app.live{display:flex}
+  .nav{width:240px;background:linear-gradient(180deg,#0E1726 0%,#16243B 100%);color:#fff;padding:22px 16px;position:fixed;height:100vh;overflow-y:auto;z-index:50}
+  .brand{display:flex;align-items:center;gap:10px;padding:0 8px 20px}
+  .brand-logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--emerald),var(--teal));display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,185,107,.4)}
+  .brand-name{font-size:17px;font-weight:700;letter-spacing:-.3px}
+  .brand-sub{font-size:11px;color:#7C8AA0;margin-top:1px}
+  .nav-label{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:#5C6A82;padding:16px 10px 8px;font-weight:700}
+  .nav-item{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:11px;cursor:pointer;font-size:14px;font-weight:500;color:#AEB9CC;transition:.15s;margin-bottom:2px}
+  .nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+  .nav-item.active{background:linear-gradient(135deg,var(--emerald),var(--teal));color:#fff;box-shadow:0 4px 14px rgba(0,185,107,.35)}
+  .nav-item .ic{font-size:18px;width:20px;text-align:center}
+  .nav-logout{margin-top:18px;padding:11px 12px;border-radius:11px;cursor:pointer;font-size:13px;color:#7C8AA0;display:flex;align-items:center;gap:10px;border:1px solid rgba(255,255,255,.08)}
+  .nav-logout:hover{color:#fff;background:rgba(255,90,95,.15)}
+
+  .main{margin-left:240px;flex:1;min-height:100vh}
+  .screen{display:none;animation:fade .35s ease}
+  .screen.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .top{background:var(--white);border-bottom:1px solid var(--line);padding:16px 30px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:40}
+  .top h1{font-size:19px;font-weight:700;letter-spacing:-.3px}
+  .top .sub{font-size:12px;color:var(--mist);margin-top:1px}
+  .top-right{display:flex;align-items:center;gap:14px}
+  .pill{font-size:12px;font-weight:600;padding:7px 13px;border-radius:30px;background:var(--emerald-l);color:var(--emerald-d)}
+  .avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--indigo),var(--sky));color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+  .wrap{padding:26px 30px}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+  .stat{background:var(--white);border-radius:var(--r);padding:18px;box-shadow:var(--sh);position:relative;overflow:hidden}
+  .stat::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%}
+  .stat.e::before{background:var(--emerald)} .stat.t::before{background:var(--teal)}
+  .stat.g::before{background:var(--gold)} .stat.s::before{background:var(--sky)}
+  .stat.i::before{background:var(--indigo)} .stat.c::before{background:var(--coral)}
+  .stat .lab{font-size:12px;color:var(--slate);font-weight:600;margin-bottom:8px}
+  .stat .val{font-size:27px;font-weight:800;letter-spacing:-.6px}
+  .stat .chg{font-size:12px;font-weight:600;margin-top:6px;display:flex;align-items:center;gap:4px}
+  .up{color:var(--emerald-d)} .down{color:var(--coral-d)} .neu{color:var(--mist)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  .card{background:var(--white);border-radius:var(--r);padding:20px;box-shadow:var(--sh)}
+  .card h3{font-size:15px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+  .card h3 .ic{font-size:18px}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-radius:var(--rs);margin-bottom:9px}
+  .row.warn{background:var(--gold-l)} .row.flat{background:var(--bg)}
+  .row .t1{font-size:13px;font-weight:600} .row .t2{font-size:11px;color:var(--slate);margin-top:2px}
+  .row.warn .t1{color:var(--gold-d)} .row.warn .t2{color:var(--gold-d);opacity:.85}
+
+  .bar-row{margin-bottom:14px}
+  .bar-top{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px}
+  .bar-top .nm{color:var(--slate);font-weight:500} .bar-top .vl{font-weight:700}
+  .bar{height:9px;background:var(--bg);border-radius:5px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:5px}
+
+  table{width:100%;border-collapse:collapse}
+  th{font-size:11px;color:var(--mist);text-transform:uppercase;letter-spacing:.5px;text-align:left;font-weight:700;padding:8px 0}
+  td{padding:11px 0;font-size:13px;border-top:1px solid var(--line)}
+  .tag{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+  .tag.ok{background:var(--emerald-l);color:var(--emerald-d)}
+  .tag.pend{background:var(--gold-l);color:var(--gold-d)}
+  .tag.info{background:var(--sky-l);color:var(--sky-d)}
+  .tag.red{background:var(--coral-l);color:var(--coral-d)}
+
+  .hero{border-radius:var(--rl);padding:34px;color:#fff;margin-bottom:22px;position:relative;overflow:hidden}
+  .hero.exec{background:linear-gradient(135deg,var(--indigo) 0%,#6B4EE8 100%)}
+  .hero.sales{background:linear-gradient(135deg,var(--emerald-d) 0%,var(--teal) 100%)}
+  .hero h2{font-size:26px;font-weight:800;letter-spacing:-.6px;max-width:520px;line-height:1.25;margin-bottom:8px}
+  .hero p{font-size:14px;opacity:.92;max-width:440px}
+  .hero .glow{position:absolute;border-radius:50%;filter:blur(50px);opacity:.4}
+
+  .btn{font-size:13px;font-weight:700;padding:11px 20px;border-radius:var(--rs);border:none;cursor:pointer;transition:.15s;font-family:inherit}
+  .btn-w{background:#fff;color:var(--emerald-d)} .btn-w:hover{transform:translateY(-1px)}
+  .btn-g{background:rgba(255,255,255,.18);color:#fff}
+  .btn-p{background:linear-gradient(135deg,var(--emerald),var(--teal));color:#fff;box-shadow:0 4px 14px rgba(0,185,107,.4)}
+  .btn-p:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,185,107,.5)}
+  .btn-o{background:var(--bg);color:var(--slate)} .btn-o:hover{background:var(--line)}
+
+  /* ---------- SITE MAP ---------- */
+  .map-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap}
+  .lg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--slate);font-weight:500}
+  .lg .sw{width:14px;height:14px;border-radius:4px}
+  .phases{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+  .phase{background:var(--white);border-radius:var(--r);padding:18px;box-shadow:var(--sh);cursor:pointer;transition:.18s;border:2px solid transparent}
+  .phase:hover{transform:translateY(-3px);box-shadow:var(--shl);border-color:var(--emerald)}
+  .phase.sel{border-color:var(--emerald);background:var(--emerald-l)}
+  .phase .pn{font-size:16px;font-weight:800}
+  .phase .pmeta{font-size:12px;color:var(--mist);margin:4px 0 12px}
+  .phase-bar{height:7px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:8px}
+  .phase-stat{display:flex;justify-content:space-between;font-size:11px;color:var(--slate)}
+
+  .plot-grid-wrap{background:var(--white);border-radius:var(--r);padding:22px;box-shadow:var(--sh)}
+  .grid-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .roads{position:relative;background:#EEF2F7;border-radius:var(--r);padding:24px;overflow-x:auto}
+  .road-label{font-size:10px;color:var(--mist);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px}
+  .plot-row{display:flex;gap:7px;margin-bottom:7px}
+  .plot{width:42px;height:42px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;cursor:pointer;transition:.12s;color:#fff;position:relative}
+  .plot:hover{transform:scale(1.14);z-index:5;box-shadow:var(--shl)}
+  .plot.sold{background:#C3CBD6;color:#6B7585;cursor:default}
+  .plot.sold:hover{transform:none;box-shadow:none}
+  .plot.avail{background:linear-gradient(135deg,var(--emerald),var(--teal))}
+  .plot.resv{background:linear-gradient(135deg,var(--gold),#E89500)}
+  .plot.prem{background:linear-gradient(135deg,var(--sky),var(--indigo))}
+  .plot.sel{outline:3px solid var(--ink);outline-offset:2px}
+
+  /* ---------- MODAL ---------- */
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(14,23,38,.55);z-index:100;align-items:center;justify-content:center;padding:20px}
+  .modal-bg.show{display:flex;animation:fade .25s ease}
+  .modal{background:#fff;border-radius:var(--rl);max-width:460px;width:100%;overflow:hidden;box-shadow:var(--shl)}
+  .modal-hd{padding:22px 24px;color:#fff;background:linear-gradient(135deg,var(--emerald-d),var(--teal))}
+  .modal-hd.resv{background:linear-gradient(135deg,var(--gold-d),var(--gold))}
+  .modal-hd .mt{font-size:19px;font-weight:800} .modal-hd .ms{font-size:13px;opacity:.9;margin-top:2px}
+  .modal-bd{padding:22px 24px}
+  .mfield{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .mfield .k{color:var(--slate)} .mfield .v{font-weight:700}
+  .field{margin-bottom:13px}
+  .field label{font-size:12px;font-weight:600;color:var(--slate);display:block;margin-bottom:6px}
+  .field input,.field select{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--bg)}
+  .seg{display:inline-flex;background:var(--bg);border-radius:30px;padding:4px;gap:2px;margin-bottom:16px;width:100%}
+  .seg button{flex:1;border:none;background:none;font-size:12px;font-weight:600;padding:9px 10px;border-radius:30px;cursor:pointer;color:var(--slate);font-family:inherit}
+  .seg button.on{background:#fff;color:var(--ink);box-shadow:var(--sh)}
+
+  /* phones */
+  .phones{display:flex;gap:30px;flex-wrap:wrap;justify-content:center;padding:10px 0}
+  .phone{width:300px;background:#0E1726;border-radius:36px;padding:9px;box-shadow:var(--shl)}
+  .phone-scr{background:#fff;border-radius:29px;overflow:hidden;height:600px;overflow-y:auto}
+  .phone-scr::-webkit-scrollbar{width:0}
+  .ph-hero{background:linear-gradient(150deg,var(--emerald-d),var(--teal));padding:22px 20px 26px;color:#fff}
+  .ph-bal{font-size:34px;font-weight:800;letter-spacing:-1px;margin:4px 0}
+  .quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:18px 16px}
+  .qa{text-align:center;cursor:pointer}
+  .qa .ico{width:52px;height:52px;margin:0 auto 5px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:22px;transition:.15s}
+  .qa:hover .ico{transform:translateY(-2px)}
+  .qa .lb{font-size:10px;color:var(--slate);font-weight:600}
+  .meter{margin:0 16px 11px;border:1px solid var(--line);border-radius:var(--rs);padding:12px}
+  .ph-nav{display:flex;justify-content:space-around;padding:13px 0;border-top:1px solid var(--line);position:sticky;bottom:0;background:#fff}
+  .ph-nav .ic{font-size:21px;color:var(--mist);cursor:pointer}
+  .ph-nav .ic.on{color:var(--emerald)}
+
+  .ussd{background:#0E1726;border-radius:18px;padding:22px;width:270px;margin:0 auto;font-family:'SF Mono',Menlo,monospace}
+  .ussd-scr{background:#1A2942;border-radius:10px;padding:18px;min-height:200px;color:#7DF0C4;font-size:14px;line-height:1.9;white-space:pre-line}
+  .ussd-in{margin-top:14px;display:flex;gap:8px}
+  .ussd-in input{flex:1;background:#1A2942;border:1px solid #2A3A56;border-radius:8px;padding:10px;color:#fff;font-family:inherit;font-size:14px}
+  .ussd-in button{background:var(--emerald);border:none;border-radius:8px;color:#fff;padding:0 16px;font-weight:700;cursor:pointer}
+  .ussd-cap{text-align:center;font-size:11px;color:var(--mist);margin-top:12px}
+
+  .listings{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px}
+  .lot{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:var(--sh);cursor:pointer;transition:.18s}
+  .lot:hover{transform:translateY(-3px);box-shadow:var(--shl)}
+  .lot-img{height:110px;display:flex;align-items:center;justify-content:center;font-size:32px;color:#fff}
+  .lot-body{padding:15px}
+  .lot-price{font-size:20px;font-weight:800;letter-spacing:-.5px}
+  .lot-mo{font-size:11px;color:var(--slate);margin-top:1px}
+  .lot-meta{font-size:11px;color:var(--mist);margin:5px 0 10px}
+  .steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .step{text-align:center}
+  .step .n{width:44px;height:44px;margin:0 auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:#fff}
+  .gov{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:13px}
+  .gov .ic{font-size:18px}
+  .demo-tag{position:fixed;bottom:16px;right:16px;background:var(--ink);color:#fff;font-size:11px;font-weight:600;padding:8px 14px;border-radius:30px;opacity:.85;z-index:60}
+  @media(max-width:920px){.stats{grid-template-columns:repeat(2,1fr)}.grid2,.listings,.phases{grid-template-columns:1fr}.roles{grid-template-columns:1fr}.nav{width:64px}.brand-name,.brand-sub,.nav-label,.nav-item span,.nav-logout span{display:none}.main{margin-left:64px}.nav-item{justify-content:center}}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login">
+  <div class="glow" style="width:300px;height:300px;background:var(--emerald);top:10%;left:15%"></div>
+  <div class="glow" style="width:260px;height:260px;background:var(--teal);bottom:12%;right:18%"></div>
+  <div class="login-card">
+    <div class="login-logo">🏗️</div>
+    <h1>InfraCo OS</h1>
+    <div class="tag">Land Fortune Holdings · unified operations platform</div>
+    <div class="role-pick">Sign in as</div>
+    <div class="roles">
+      <div class="role" onclick="login('staff','Estate manager','EM')">
+        <div class="ri" style="background:var(--emerald-l);color:var(--emerald-d)">📊</div>
+        <div class="rt">Estate manager</div><div class="rd">Operations, sales & site map</div>
+      </div>
+      <div class="role" onclick="login('exec','Executive','PM')">
+        <div class="ri" style="background:var(--indigo-l);color:var(--indigo-d)">📈</div>
+        <div class="rt">Executive</div><div class="rd">Group board view</div>
+      </div>
+      <div class="role" onclick="login('resident','Resident','TM')">
+        <div class="ri" style="background:var(--teal-l);color:var(--teal-d)">📱</div>
+        <div class="rt">Resident</div><div class="rd">Super-App on mobile</div>
+      </div>
+      <div class="role" onclick="login('sales','Public buyer','GU')">
+        <div class="ri" style="background:var(--gold-l);color:var(--gold-d)">🌍</div>
+        <div class="rt">Public / diaspora</div><div class="rd">Browse & buy stands</div>
+      </div>
+      <div class="role" onclick="login('contractor','Contractor','CV')">
+        <div class="ri" style="background:var(--coral-l);color:var(--coral-d)">🏗️</div>
+        <div class="rt">Contractor</div><div class="rd">Work packages & certificates</div>
+      </div>
+      <div class="role" onclick="login('tenant','Tenant','BT')">
+        <div class="ri" style="background:var(--sky-l);color:var(--sky-d)">🏢</div>
+        <div class="rt">Tenant</div><div class="rd">Lease, rent & obligations</div>
+      </div>
+    </div>
+    <div class="login-foot">🔒 Secured with JWT + TOTP multi-factor authentication</div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div class="app" id="app">
+  <nav class="nav">
+    <div class="brand">
+      <div class="brand-logo">🏗️</div>
+      <div><div class="brand-name">InfraCo OS</div><div class="brand-sub" id="roleSub">Estate manager</div></div>
+    </div>
+    <div id="navStaff">
+      <div class="nav-label">Operations</div>
+      <div class="nav-item active" data-s="staff"><span class="ic">📊</span><span>Dashboard</span></div>
+      <div class="nav-item" data-s="sitemap"><span class="ic">🗺️</span><span>Site map</span></div>
+      <div class="nav-item" data-s="debtors"><span class="ic">💳</span><span>Debtors</span></div>
+      <div class="nav-item" data-s="development"><span class="ic">🏗️</span><span>Development</span></div>
+      <div class="nav-item" data-s="compliance"><span class="ic">🛡️</span><span>Compliance</span></div>
+      <div class="nav-item" data-s="smscentre"><span class="ic">💬</span><span>SMS centre</span></div>
+      <div class="nav-label">Channels</div>
+      <div class="nav-item" data-s="resident"><span class="ic">📱</span><span>Resident app</span></div>
+      <div class="nav-item" data-s="tenant"><span class="ic">🏢</span><span>Tenant portal</span></div>
+      <div class="nav-item" data-s="contractor"><span class="ic">🏗️</span><span>Contractor</span></div>
+      <div class="nav-item" data-s="ussd"><span class="ic">📟</span><span>USSD flow</span></div>
+      <div class="nav-item" data-s="sales"><span class="ic">🌍</span><span>Sales site</span></div>
+      <div class="nav-item" data-s="exec"><span class="ic">📈</span><span>Board view</span></div>
+    </div>
+    <div class="nav-logout" onclick="logout()"><span class="ic">⏏</span><span>Sign out</span></div>
+  </nav>
+
+  <div class="main">
+
+  <!-- STAFF DASHBOARD -->
+  <section class="screen active" id="staff">
+    <div class="top"><div><h1>Estate operations</h1><div class="sub">Kwekwe Estate · live</div></div><div class="top-right"><span class="pill">● Jun 2026</span><div class="avatar" id="av1">EM</div></div></div>
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat e"><div class="lab">Collections (MTD)</div><div class="val">$284,150</div><div class="chg up">▲ 12% vs May</div></div>
+        <div class="stat c"><div class="lab">Arrears book</div><div class="val">$61,420</div><div class="chg down">▲ 38 accounts</div></div>
+        <div class="stat t"><div class="lab">Stands sold</div><div class="val">3,847</div><div class="chg neu">of 5,000 · 77%</div></div>
+        <div class="stat g"><div class="lab">Power vended today</div><div class="val">14.2<span style="font-size:16px"> MWh</span></div><div class="chg neu">1,204 tokens</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3><span class="ic">✅</span> Pending approvals</h3>
+          <div class="row warn"><div><div class="t1">Ledger adjustment · $18,500</div><div class="t2">DoA — needs 2nd signatory</div></div><span style="font-size:18px;color:var(--gold-d)">›</span></div>
+          <div class="row warn"><div><div class="t1">EOS network lease invoice</div><div class="t2">Related-party — review required</div></div><span style="font-size:18px;color:var(--gold-d)">›</span></div>
+          <div class="row flat"><div><div class="t1">Lease renewal — Block C, Unit 12</div><div class="t2">Commercial · $2,400/mo</div></div><span style="font-size:18px;color:var(--mist)">›</span></div>
+        </div>
+        <div class="card">
+          <h3><span class="ic">⚡</span> Utilities — live</h3>
+          <div class="bar-row"><div class="bar-top"><span class="nm">Prepaid power</span><span class="vl">98.2%</span></div><div class="bar"><i style="width:98%;background:var(--emerald)"></i></div></div>
+          <div class="bar-row"><div class="bar-top"><span class="nm">Easy Mobile LTE</span><span class="vl">99.4%</span></div><div class="bar"><i style="width:99%;background:var(--sky)"></i></div></div>
+          <div class="bar-row"><div class="bar-top"><span class="nm">Solar net-metering</span><span class="vl">2,140 kWh exported</span></div><div class="bar"><i style="width:64%;background:var(--gold)"></i></div></div>
+          <div style="font-size:11px;color:var(--mist);margin-top:4px">Meters online: 3,810 / 3,847</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3><span class="ic">🗺️</span> Quick action — allocate a stand</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div style="font-size:13px;color:var(--slate);max-width:420px">Open the interactive site map to pick an available stand and reserve it on behalf of a walk-in or phone buyer.</div>
+          <button class="btn btn-p" onclick="go('sitemap')">Open site map →</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SITE MAP -->
+  <section class="screen" id="sitemap">
+    <div class="top"><div><h1 id="mapTitle">Site map — Kwekwe Estate</h1><div class="sub" id="mapSub">33 ha mixed-use · 5,000 stands across 3 phases</div></div><div class="top-right"><span class="pill" id="mapCount">1,153 available</span></div></div>
+    <div class="wrap">
+      <div class="seg" style="margin-bottom:18px">
+        <button class="on" id="estKwekwe" onclick="setEstate('kwekwe')">Kwekwe Estate</button>
+        <button id="estTynwald" onclick="setEstate('tynwald')">Tynwald Township</button>
+      </div>
+      <div class="map-toolbar">
+        <div class="legend">
+          <div class="lg"><span class="sw" style="background:linear-gradient(135deg,var(--emerald),var(--teal))"></span> Available</div>
+          <div class="lg"><span class="sw" style="background:linear-gradient(135deg,var(--sky),var(--indigo))"></span> Premium</div>
+          <div class="lg"><span class="sw" style="background:linear-gradient(135deg,var(--gold),#E89500)"></span> Reserved</div>
+          <div class="lg"><span class="sw" style="background:#C3CBD6"></span> Sold</div>
+        </div>
+      </div>
+
+      <div class="phases" id="phaseCards"></div>
+
+      <div class="plot-grid-wrap">
+        <div class="grid-head">
+          <div><b style="font-size:15px" id="gridTitle">Phase 2 — plot layout</b><div style="font-size:12px;color:var(--mist);margin-top:2px">Click any available stand to view details and reserve</div></div>
+          <span style="font-size:12px;color:var(--slate)" id="gridCount">Showing 96 stands</span>
+        </div>
+        <div class="roads" id="roads"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEBTORS -->
+  <section class="screen" id="debtors">
+    <div class="top"><div><h1>Debtors workflow</h1><div class="sub">Arrears management · Kwekwe Estate</div></div><div class="top-right"><span class="pill" style="background:var(--coral-l);color:var(--coral-d)">38 in arrears</span></div></div>
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat c"><div class="lab">Total arrears</div><div class="val">$61,420</div><div class="chg down">38 accounts</div></div>
+        <div class="stat g"><div class="lab">30–60 days</div><div class="val">$22,100</div><div class="chg neu">14 accounts</div></div>
+        <div class="stat c"><div class="lab">60–90 days</div><div class="val">$26,800</div><div class="chg down">16 accounts</div></div>
+        <div class="stat i"><div class="lab">90+ days</div><div class="val">$12,520</div><div class="chg neu">8 accounts</div></div>
+      </div>
+      <div class="card">
+        <h3><span class="ic">💳</span> Accounts requiring action</h3>
+        <table>
+          <tr><th>Resident</th><th>Stand</th><th>Days</th><th style="text-align:right">Balance</th><th style="text-align:right">Action</th></tr>
+          <tr><td>K. Sibanda</td><td style="color:var(--slate)">KW-0922</td><td><span class="tag pend">47d</span></td><td style="text-align:right">$1,840</td><td style="text-align:right"><button class="btn btn-o" style="font-size:11px;padding:5px 11px" onclick="alert('Demo: reminder SMS queued via Africa\'s Talking.')">Remind</button></td></tr>
+          <tr><td>M. Chenga</td><td style="color:var(--slate)">KW-1455</td><td><span class="tag pend">52d</span></td><td style="text-align:right">$2,210</td><td style="text-align:right"><button class="btn btn-o" style="font-size:11px;padding:5px 11px" onclick="alert('Demo: reminder SMS queued.')">Remind</button></td></tr>
+          <tr><td>P. Ndlovu</td><td style="color:var(--slate)">KW-0318</td><td><span class="tag red">78d</span></td><td style="text-align:right">$3,640</td><td style="text-align:right"><button class="btn" style="background:var(--gold-l);color:var(--gold-d);font-size:11px;padding:5px 11px" onclick="alert('Demo: payment plan offer drafted.')">Plan</button></td></tr>
+          <tr><td>S. Marufu</td><td style="color:var(--slate)">KW-2201</td><td><span class="tag red">94d</span></td><td style="text-align:right">$4,180</td><td style="text-align:right"><button class="btn" style="background:var(--coral-l);color:var(--coral-d);font-size:11px;padding:5px 11px" onclick="alert('Demo: escalated to legal review — requires DoA dual-auth approval.')">Escalate</button></td></tr>
+        </table>
+        <div style="background:var(--bg);border-radius:var(--rs);padding:14px;margin-top:16px;font-size:12px;color:var(--slate)"><b style="color:var(--ink)">Automated cascade:</b> reminder SMS at 30 days → payment-plan offer at 60 days → service throttle at 90 days → legal escalation (dual-auth required) at 120 days.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESIDENT -->
+  <section class="screen" id="resident">
+    <div class="top"><div><h1>Resident Super-App</h1><div class="sub">What a household sees on their phone</div></div><div class="top-right"><span class="pill" style="background:var(--teal-l);color:var(--teal-d)">📱 Mobile</span></div></div>
+    <div class="wrap"><div class="phones"><div class="phone"><div class="phone-scr">
+      <div class="ph-hero">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="display:flex;gap:8px;align-items:center"><div style="width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center">🏗️</div><b style="font-size:14px">InfraCo</b></div><span style="font-size:18px">🔔</span></div>
+        <div style="font-size:12px;color:#A6F0D5;margin-top:16px">Wallet balance</div><div class="ph-bal">$45.80</div><div style="font-size:12px;color:#A6F0D5">Tendai Moyo · Stand KW-1842</div>
+      </div>
+      <div class="quick">
+        <div class="qa"><div class="ico" style="background:var(--gold-l);color:var(--gold-d)">⚡</div><div class="lb">Buy power</div></div>
+        <div class="qa"><div class="ico" style="background:var(--sky-l);color:var(--sky-d)">📶</div><div class="lb">Data</div></div>
+        <div class="qa"><div class="ico" style="background:var(--emerald-l);color:var(--emerald-d)">💵</div><div class="lb">Pay bill</div></div>
+        <div class="qa"><div class="ico" style="background:var(--indigo-l);color:var(--indigo-d)">➕</div><div class="lb">Top up</div></div>
+      </div>
+      <div class="meter"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:var(--slate)">⚡ Power meter</span><b>12.4 kWh</b></div><div class="bar"><i style="width:31%;background:var(--gold)"></i></div><div style="font-size:10px;color:var(--mist);margin-top:5px">~3 days left · meter 37-4192-8810</div></div>
+      <div class="meter"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:var(--slate)">📶 Easy Mobile data</span><b>1.2 GB</b></div><div class="bar"><i style="width:60%;background:var(--sky)"></i></div><div style="font-size:10px;color:var(--mist);margin-top:5px">Monthly 2GB · renews Jun 30</div></div>
+      <div style="padding:6px 16px 16px">
+        <div style="font-size:12px;font-weight:700;color:var(--slate);margin:8px 0">This month</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)"><div style="display:flex;gap:9px;align-items:center"><div style="width:30px;height:30px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center">🏠</div><div><div style="font-size:12px;font-weight:600">Stand instalment</div><div style="font-size:10px;color:var(--mist)">Due Jun 25</div></div></div><b style="font-size:12px">$320.00</b></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0"><div style="display:flex;gap:9px;align-items:center"><div style="width:30px;height:30px;border-radius:8px;background:var(--emerald-l);display:flex;align-items:center;justify-content:center">✅</div><div><div style="font-size:12px;font-weight:600">Power token</div><div style="font-size:10px;color:var(--mist)">Jun 14 · 40 kWh</div></div></div><b style="font-size:12px;color:var(--emerald-d)">$15.00</b></div>
+      </div>
+      <div class="ph-nav"><span class="ic on">🏠</span><span class="ic">⚡</span><span class="ic">🧾</span><span class="ic">👤</span></div>
+    </div></div></div></div>
+  </section>
+
+  <!-- USSD -->
+  <section class="screen" id="ussd">
+    <div class="top"><div><h1>USSD flow</h1><div class="sub">Works on any phone, any network, zero data</div></div><div class="top-right"><span class="pill" style="background:var(--gold-l);color:var(--gold-d)">📟 Feature phone</span></div></div>
+    <div class="wrap"><div style="max-width:340px;margin:0 auto">
+      <div class="ussd"><div class="ussd-scr" id="ussdScr"></div><div class="ussd-in"><input id="ussdIn" placeholder="Reply..." onkeydown="if(event.key==='Enter')ussdSend()"><button onclick="ussdSend()">Send</button></div></div>
+      <div class="ussd-cap">Dial <b>*384*57#</b> on any handset — even a $20 feature phone with no internet. This is how residents without a smartphone vend power and pay bills.</div>
+      <div style="text-align:center;margin-top:14px"><button class="btn btn-p" style="font-size:12px" onclick="ussdReset()">↺ Reset session</button></div>
+    </div></div>
+  </section>
+
+  <!-- SALES -->
+  <section class="screen" id="sales">
+    <div class="top"><div><h1>Diaspora sales site</h1><div class="sub">Public-facing · what overseas buyers see</div></div><div class="top-right"><span class="pill">🌍 Public</span></div></div>
+    <div class="wrap">
+      <div class="hero sales"><div class="glow" style="width:220px;height:220px;background:#FFE08A;bottom:-70px;right:30px"></div><div style="position:relative"><h2>Own a serviced stand back home — from anywhere in the world</h2><p style="margin-bottom:20px">Title-secured plots in Kwekwe with power, water and fibre. Pay monthly in USD.</p><button class="btn btn-w" onclick="go('sitemap')">Browse the site map</button></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><b style="font-size:15px">Featured stands</b><span style="font-size:12px;color:var(--slate)">1,153 available</span></div>
+      <div class="listings">
+        <div class="lot" onclick="openReserve('KW-2104','400','18500','385','Premium')"><div class="lot-img" style="background:linear-gradient(135deg,var(--emerald),var(--teal))">📍</div><div class="lot-body"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">Stand KW-2104</b><span class="tag ok">Premium</span></div><div class="lot-meta">400 m² · Phase 2 · corner</div><div class="lot-price">$18,500</div><div class="lot-mo">or $385/mo · 48 months</div></div></div>
+        <div class="lot" onclick="openReserve('KW-1887','300','12800','267','Standard')"><div class="lot-img" style="background:linear-gradient(135deg,var(--sky),var(--indigo))">📍</div><div class="lot-body"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">Stand KW-1887</b><span class="tag info">Standard</span></div><div class="lot-meta">300 m² · Phase 2 · mid-block</div><div class="lot-price">$12,800</div><div class="lot-mo">or $267/mo · 48 months</div></div></div>
+        <div class="lot" onclick="openReserve('KW-3320','500','22000','458','Premium')"><div class="lot-img" style="background:linear-gradient(135deg,var(--gold),var(--coral))">📍</div><div class="lot-body"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">Stand KW-3320</b><span class="tag pend">2 left</span></div><div class="lot-meta">500 m² · Phase 3 · near school</div><div class="lot-price">$22,000</div><div class="lot-mo">or $458/mo · 48 months</div></div></div>
+      </div>
+      <div class="card"><h3><span class="ic">🧭</span> How it works</h3><div class="steps3">
+        <div class="step"><div class="n" style="background:linear-gradient(135deg,var(--sky),var(--indigo))">1</div><b style="font-size:13px">Reserve online</b><div style="font-size:12px;color:var(--mist);margin-top:3px">Pick a stand, pay deposit in USD</div></div>
+        <div class="step"><div class="n" style="background:linear-gradient(135deg,var(--gold),var(--coral))">2</div><b style="font-size:13px">Pay monthly</b><div style="font-size:12px;color:var(--mist);margin-top:3px">Track instalments in the app</div></div>
+        <div class="step"><div class="n" style="background:linear-gradient(135deg,var(--emerald),var(--teal))">✓</div><b style="font-size:13px">Get title</b><div style="font-size:12px;color:var(--mist);margin-top:3px">Transfer on full payment</div></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- EXEC -->
+  <section class="screen" id="exec">
+    <div class="top"><div><h1>Group executive view</h1><div class="sub">Land Fortune Holdings · Q2 2026</div></div><div class="top-right"><span class="pill" style="background:var(--indigo-l);color:var(--indigo-d)">3 projects</span></div></div>
+    <div class="wrap">
+      <div class="hero exec"><div class="glow" style="width:240px;height:240px;background:#9D7BFF;top:-60px;right:40px"></div><div style="position:relative"><h2>$3.42M group revenue, up 18% year on year</h2><p>Two estates live, 19,240 active residents, 82% collection rate. The platform runs the whole group's operations.</p></div></div>
+      <div class="stats">
+        <div class="stat i"><div class="lab">Revenue YTD</div><div class="val">$3.42M</div><div class="chg up">▲ 18% YoY</div></div>
+        <div class="stat e"><div class="lab">Collection rate</div><div class="val">82.3%</div><div class="chg up">▲ 3.1 pts</div></div>
+        <div class="stat t"><div class="lab">Active residents</div><div class="val">19,240</div><div class="chg neu">across 2 estates</div></div>
+        <div class="stat g"><div class="lab">Utility margin</div><div class="val">31.4%</div><div class="chg neu">power + LTE blended</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px"><h3><span class="ic">💰</span> Revenue by stream (YTD)</h3>
+        <div class="bar-row"><div class="bar-top"><span class="nm">Stand sales & instalments</span><span class="vl">$1.92M</span></div><div class="bar"><i style="width:56%;background:var(--emerald)"></i></div></div>
+        <div class="bar-row"><div class="bar-top"><span class="nm">Prepaid utilities</span><span class="vl">$782K</span></div><div class="bar"><i style="width:23%;background:var(--sky)"></i></div></div>
+        <div class="bar-row"><div class="bar-top"><span class="nm">Commercial leasing</span><span class="vl">$486K</span></div><div class="bar"><i style="width:14%;background:var(--gold)"></i></div></div>
+        <div class="bar-row"><div class="bar-top"><span class="nm">LTE / Easy Mobile</span><span class="vl">$232K</span></div><div class="bar"><i style="width:7%;background:var(--indigo)"></i></div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px"><h3><span class="ic">📊</span> Budget vs actual (YTD)</h3>
+        <table>
+          <tr><th>Line</th><th style="text-align:right">Budget</th><th style="text-align:right">Actual</th><th style="text-align:right">Variance</th></tr>
+          <tr><td>Sales revenue</td><td style="text-align:right">$1.80M</td><td style="text-align:right">$1.92M</td><td style="text-align:right"><span class="tag ok">+6.7%</span></td></tr>
+          <tr><td>Utility revenue</td><td style="text-align:right">$1.05M</td><td style="text-align:right">$1.01M</td><td style="text-align:right"><span class="tag pend">−3.8%</span></td></tr>
+          <tr><td>Infrastructure capex</td><td style="text-align:right">$2.40M</td><td style="text-align:right">$2.18M</td><td style="text-align:right"><span class="tag ok">−9.2%</span></td></tr>
+          <tr><td>Opex</td><td style="text-align:right">$640K</td><td style="text-align:right">$702K</td><td style="text-align:right"><span class="tag red">+9.7%</span></td></tr>
+        </table>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3><span class="ic">💵</span> Collections overview</h3>
+          <div class="bar-row"><div class="bar-top"><span class="nm">Current (on time)</span><span class="vl">82.3%</span></div><div class="bar"><i style="width:82%;background:var(--emerald)"></i></div></div>
+          <div class="bar-row"><div class="bar-top"><span class="nm">1–30 days late</span><span class="vl">9.4%</span></div><div class="bar"><i style="width:9%;background:var(--gold)"></i></div></div>
+          <div class="bar-row"><div class="bar-top"><span class="nm">31–90 days late</span><span class="vl">5.8%</span></div><div class="bar"><i style="width:6%;background:#E89500"></i></div></div>
+          <div class="bar-row"><div class="bar-top"><span class="nm">90+ days (at risk)</span><span class="vl">2.5%</span></div><div class="bar"><i style="width:3%;background:var(--coral)"></i></div></div>
+          <div style="font-size:11px;color:var(--mist);margin-top:4px">Collected MTD: $284,150 · billed $345,200</div>
+        </div>
+        <div class="card"><h3><span class="ic">🏘️</span> Occupancy status</h3>
+          <div class="stats" style="grid-template-columns:1fr 1fr;gap:10px;margin:0">
+            <div class="stat e" style="padding:13px"><div class="lab">Stands occupied</div><div class="val" style="font-size:22px">3,210</div><div class="chg neu">83% of sold</div></div>
+            <div class="stat t" style="padding:13px"><div class="lab">Built &amp; handed over</div><div class="val" style="font-size:22px">2,840</div><div class="chg neu">74% of sold</div></div>
+            <div class="stat g" style="padding:13px"><div class="lab">Commercial leased</div><div class="val" style="font-size:22px">88%</div><div class="chg up">▲ 4 units</div></div>
+            <div class="stat s" style="padding:13px"><div class="lab">Under construction</div><div class="val" style="font-size:22px">370</div><div class="chg neu">homes in build</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3><span class="ic">☀️</span> Solar &amp; ZESA grid status</h3>
+          <div class="row flat" style="margin-bottom:11px"><div><div class="t1">Solar generation today</div><div class="t2">3.2 MW peak · 18.4 MWh generated</div></div><span class="tag ok">Online</span></div>
+          <div class="row flat" style="margin-bottom:11px"><div><div class="t1">ZESA grid supply</div><div class="t2">Importing 1.1 MW · stable</div></div><span class="tag ok">Connected</span></div>
+          <div class="row warn" style="margin-bottom:0"><div><div class="t1">Grid outage events (30d)</div><div class="t2">7 events · solar covered 94% of load</div></div><span class="tag pend">7</span></div>
+        </div>
+        <div class="card"><h3><span class="ic">🔄</span> Reverse (net) metering</h3>
+          <div class="bar-row"><div class="bar-top"><span class="nm">Exported to grid (MTD)</span><span class="vl">2,140 kWh</span></div><div class="bar"><i style="width:64%;background:var(--gold)"></i></div></div>
+          <div class="bar-row"><div class="bar-top"><span class="nm">Self-consumed</span><span class="vl">11,820 kWh</span></div><div class="bar"><i style="width:88%;background:var(--emerald)"></i></div></div>
+          <div style="display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line);margin-top:6px;font-size:13px"><span style="color:var(--slate)">Net-metering credit earned</span><b style="color:var(--emerald-d)">$1,284</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--slate)">Households net-positive</span><b>312</b></div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3><span class="ic">🏘️</span> Estate performance</h3>
+          <div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><b style="font-size:13px">Kwekwe (mixed-use)</b><span class="tag ok">77% sold</span></div><div style="font-size:11px;color:var(--mist)">3,847 stands · $2.61M YTD</div></div>
+          <div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><b style="font-size:13px">Tynwald Township</b><span class="tag pend">Launching</span></div><div style="font-size:11px;color:var(--mist)">222 stands · 31.2 ha · 1.5 MW solar · $7.9M GDV</div></div>
+          <div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><b style="font-size:13px">Agro-industrial estate</b><span class="tag pend">22% sold</span></div><div style="font-size:11px;color:var(--mist)">990 plots · $810K YTD · diaspora-led</div></div>
+        </div>
+        <div class="card"><h3><span class="ic">🛡️</span> Governance flags</h3>
+          <div class="gov"><span class="ic">🟢</span> LFH↔EOS flows documented</div>
+          <div class="gov"><span class="ic">🟡</span> Network lease valuation due</div>
+          <div class="gov"><span class="ic">🟢</span> DoA dual-auth active</div>
+          <div class="gov"><span class="ic">⏳</span> Solar credit audit · Q3</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEVELOPMENT STATUS -->
+  <section class="screen" id="development">
+    <div class="top"><div><h1>Development status</h1><div class="sub">Construction &amp; infrastructure build-out · Kwekwe Estate</div></div><div class="top-right"><span class="pill" style="background:var(--coral-l);color:var(--coral-d)">370 homes in build</span></div></div>
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat e"><div class="lab">Infrastructure complete</div><div class="val">68%</div><div class="chg up">▲ on schedule</div></div>
+        <div class="stat t"><div class="lab">Homes handed over</div><div class="val">2,840</div><div class="chg neu">74% of sold</div></div>
+        <div class="stat s"><div class="lab">Under construction</div><div class="val">370</div><div class="chg neu">avg 62% done</div></div>
+        <div class="stat g"><div class="lab">Capex spent YTD</div><div class="val">$2.18M</div><div class="chg up">9% under budget</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px"><h3><span class="ic">🚧</span> Infrastructure by phase</h3>
+        <div class="bar-row"><div class="bar-top"><span class="nm">Phase 1 — roads, water, power, fibre</span><span class="vl">100%</span></div><div class="bar"><i style="width:100%;background:var(--emerald)"></i></div></div>
+        <div class="bar-row"><div class="bar-top"><span class="nm">Phase 2 — roads &amp; servicing</span><span class="vl">82%</span></div><div class="bar"><i style="width:82%;background:var(--teal)"></i></div></div>
+        <div class="bar-row"><div class="bar-top"><span class="nm">Phase 3 — earthworks &amp; bulk services</span><span class="vl">41%</span></div><div class="bar"><i style="width:41%;background:var(--gold)"></i></div></div>
+        <div class="bar-row"><div class="bar-top"><span class="nm">Solar plant &amp; mini-grid</span><span class="vl">76%</span></div><div class="bar"><i style="width:76%;background:var(--sky)"></i></div></div>
+      </div>
+      <div class="card"><h3><span class="ic">📋</span> Active work packages</h3>
+        <table>
+          <tr><th>Package</th><th>Contractor</th><th>Progress</th><th style="text-align:right">Value</th><th style="text-align:right">Status</th></tr>
+          <tr><td>Phase 3 earthworks</td><td style="color:var(--slate)">Chamvari Civils</td><td>41%</td><td style="text-align:right">$840K</td><td style="text-align:right"><span class="tag info">On track</span></td></tr>
+          <tr><td>Bulk water reticulation</td><td style="color:var(--slate)">AquaBuild Zw</td><td>67%</td><td style="text-align:right">$520K</td><td style="text-align:right"><span class="tag info">On track</span></td></tr>
+          <tr><td>Solar plant install</td><td style="color:var(--slate)">SunGrid EOS</td><td>76%</td><td style="text-align:right">$1.1M</td><td style="text-align:right"><span class="tag ok">Ahead</span></td></tr>
+          <tr><td>Phase 2 road surfacing</td><td style="color:var(--slate)">Chamvari Civils</td><td>82%</td><td style="text-align:right">$390K</td><td style="text-align:right"><span class="tag pend">Cert due</span></td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPLIANCE -->
+  <section class="screen" id="compliance">
+    <div class="top"><div><h1>Compliance &amp; governance</h1><div class="sub">Regulatory standing · related-party controls · audit</div></div><div class="top-right"><span class="pill">92% compliant</span></div></div>
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat e"><div class="lab">Permits current</div><div class="val">14 / 15</div><div class="chg up">1 renewal pending</div></div>
+        <div class="stat t"><div class="lab">Audit trail events</div><div class="val">48,210</div><div class="chg neu">fully logged</div></div>
+        <div class="stat g"><div class="lab">Related-party flows</div><div class="val">6</div><div class="chg neu">documented</div></div>
+        <div class="stat s"><div class="lab">Dual-auth actions</div><div class="val">231</div><div class="chg up">100% enforced</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px"><h3><span class="ic">⚖️</span> Regulatory framework adherence</h3>
+        <table>
+          <tr><th>Framework</th><th>Scope</th><th style="text-align:right">Status</th></tr>
+          <tr><td>RTCP Act (29:12)</td><td style="color:var(--slate)">Town planning &amp; layout approval</td><td style="text-align:right"><span class="tag ok">Approved</span></td></tr>
+          <tr><td>Land Survey Act (20:12)</td><td style="color:var(--slate)">Stand survey &amp; pegging</td><td style="text-align:right"><span class="tag ok">Current</span></td></tr>
+          <tr><td>EMA (20:27)</td><td style="color:var(--slate)">Environmental impact</td><td style="text-align:right"><span class="tag ok">Certified</span></td></tr>
+          <tr><td>Urban Councils Act (29:15)</td><td style="color:var(--slate)">Service standards</td><td style="text-align:right"><span class="tag ok">Compliant</span></td></tr>
+          <tr><td>ZIDA Act (14:37)</td><td style="color:var(--slate)">Investment licensing</td><td style="text-align:right"><span class="tag pend">Renewal Q3</span></td></tr>
+        </table>
+      </div>
+      <div class="card"><h3><span class="ic">🔗</span> Related-party governance — LFH ↔ EOS</h3>
+        <table>
+          <tr><th>Flow</th><th>Basis</th><th style="text-align:right">Control</th></tr>
+          <tr><td>Payments switch</td><td style="color:var(--slate)">Arm's-length fee schedule</td><td style="text-align:right"><span class="tag ok">Documented</span></td></tr>
+          <tr><td>LTE network lease</td><td style="color:var(--slate)">Independent valuation</td><td style="text-align:right"><span class="tag pend">Due</span></td></tr>
+          <tr><td>Solar credits</td><td style="color:var(--slate)">Metered settlement</td><td style="text-align:right"><span class="tag ok">Audited</span></td></tr>
+          <tr><td>CTO services</td><td style="color:var(--slate)">Service agreement</td><td style="text-align:right"><span class="tag ok">Signed</span></td></tr>
+        </table>
+        <div style="background:var(--emerald-l);border-radius:var(--rs);padding:13px;margin-top:14px;font-size:12px;color:var(--emerald-d)"><b>All material related-party transactions</b> route through dual-authorisation and are recorded to an immutable audit trail — supporting independent review and bank due diligence.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TENANT PORTAL -->
+  <section class="screen" id="tenant">
+    <div class="top"><div><h1>Tenant portal</h1><div class="sub">Commercial &amp; residential lease tenants</div></div><div class="top-right"><span class="pill" style="background:var(--sky-l);color:var(--sky-d)">🏢 Tenant</span></div></div>
+    <div class="wrap">
+      <div class="hero" style="background:linear-gradient(135deg,var(--sky-d),var(--indigo))"><div class="glow" style="width:200px;height:200px;background:#7FB4FF;top:-50px;right:50px"></div><div style="position:relative"><h2>Block C, Unit 12 — Retail</h2><p>Bhola Traders (Pvt) Ltd · lease active · next review Dec 2026</p></div></div>
+      <div class="stats">
+        <div class="stat s"><div class="lab">Monthly rent</div><div class="val">$2,400</div><div class="chg neu">due 1st</div></div>
+        <div class="stat e"><div class="lab">Payment status</div><div class="val" style="font-size:20px">Current</div><div class="chg up">paid Jun 1</div></div>
+        <div class="stat g"><div class="lab">Lease expires</div><div class="val" style="font-size:20px">Mar 2028</div><div class="chg neu">21 months</div></div>
+        <div class="stat t"><div class="lab">Utilities (MTD)</div><div class="val">$410</div><div class="chg neu">power + water</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3><span class="ic">📄</span> Lease summary</h3>
+          <div class="mfield"><span class="k">Premises</span><span class="v">Block C, Unit 12 · 85 m²</span></div>
+          <div class="mfield"><span class="k">Use</span><span class="v">Retail</span></div>
+          <div class="mfield"><span class="k">Term</span><span class="v">5 years</span></div>
+          <div class="mfield"><span class="k">Escalation</span><span class="v">8% annual</span></div>
+          <div class="mfield" style="border:none"><span class="k">Deposit held</span><span class="v">$4,800</span></div>
+        </div>
+        <div class="card"><h3><span class="ic">🧾</span> Obligations &amp; actions</h3>
+          <div class="row flat" style="margin-bottom:9px"><div><div class="t1">June rent</div><div class="t2">Paid · $2,400</div></div><span class="tag ok">Done</span></div>
+          <div class="row warn" style="margin-bottom:9px"><div><div class="t1">Insurance certificate</div><div class="t2">Renewal due in 12 days</div></div><span class="tag pend">Action</span></div>
+          <div class="row flat" style="margin-bottom:9px"><div><div class="t1">Utility share (CAM)</div><div class="t2">Due Jul 1 · $410</div></div><span class="tag info">Upcoming</span></div>
+          <button class="btn btn-p" style="width:100%;margin-top:6px" onclick="alert('Demo: rent payment initiated via EOS payments switch.')">Pay rent &amp; utilities</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTRACTOR -->
+  <section class="screen" id="contractor">
+    <div class="top"><div><h1>Contractor portal</h1><div class="sub">Chamvari Civils · work packages &amp; certificates</div></div><div class="top-right"><span class="pill" style="background:var(--coral-l);color:var(--coral-d)">🏗️ Contractor</span></div></div>
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat e"><div class="lab">Active packages</div><div class="val">2</div><div class="chg neu">$1.23M total</div></div>
+        <div class="stat g"><div class="lab">Certified to date</div><div class="val">$680K</div><div class="chg up">55% of value</div></div>
+        <div class="stat s"><div class="lab">Pending certificate</div><div class="val">$180K</div><div class="chg neu">awaiting approval</div></div>
+        <div class="stat t"><div class="lab">Retention held</div><div class="val">$68K</div><div class="chg neu">5% retention</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px"><h3><span class="ic">📋</span> My work packages</h3>
+        <table>
+          <tr><th>Package</th><th>Progress</th><th style="text-align:right">Value</th><th style="text-align:right">Status</th></tr>
+          <tr><td>Phase 3 earthworks</td><td>41%</td><td style="text-align:right">$840K</td><td style="text-align:right"><span class="tag info">In progress</span></td></tr>
+          <tr><td>Phase 2 road surfacing</td><td>82%</td><td style="text-align:right">$390K</td><td style="text-align:right"><span class="tag pend">Cert due</span></td></tr>
+        </table>
+      </div>
+      <div class="card"><h3><span class="ic">📑</span> Payment certificates</h3>
+        <div class="row flat" style="margin-bottom:9px"><div><div class="t1">IPC #4 — Phase 2 surfacing</div><div class="t2">Submitted Jun 10 · $180,000</div></div><span class="tag pend">Under review</span></div>
+        <div class="row flat" style="margin-bottom:9px"><div><div class="t1">IPC #3 — Phase 2 surfacing</div><div class="t2">Approved May 28 · $210,000</div></div><span class="tag ok">Paid</span></div>
+        <div class="row flat" style="margin-bottom:13px"><div><div class="t1">IPC #2 — Phase 3 earthworks</div><div class="t2">Approved May 12 · $290,000</div></div><span class="tag ok">Paid</span></div>
+        <button class="btn btn-p" style="width:100%" onclick="alert('Demo: new interim payment certificate (IPC) submitted. Routed for QS verification then DoA approval before payment.')">Submit new certificate</button>
+        <div style="background:var(--bg);border-radius:var(--rs);padding:13px;margin-top:14px;font-size:12px;color:var(--slate)">Certificates route through QS verification → dual-auth approval → payment via EOS switch, with retention auto-calculated. Every step is logged.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SMS CENTRE -->
+  <section class="screen" id="smscentre">
+    <div class="top"><div><h1>SMS &amp; notifications centre</h1><div class="sub">Resident messaging · powered by Africa's Talking</div></div><div class="top-right"><span class="pill">● Gateway online</span></div></div>
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat e"><div class="lab">Sent today</div><div class="val">1,847</div><div class="chg up">▲ 99.2% delivered</div></div>
+        <div class="stat t"><div class="lab">Sent this month</div><div class="val">42,310</div><div class="chg neu">SMS + USSD</div></div>
+        <div class="stat s"><div class="lab">Avg delivery</div><div class="val">4.2s</div><div class="chg neu">all networks</div></div>
+        <div class="stat g"><div class="lab">Cost (MTD)</div><div class="val">$338</div><div class="chg neu">$0.008 / SMS</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3><span class="ic">📋</span> Message templates</h3>
+          <div class="row flat" style="margin-bottom:9px"><div><div class="t1">Token vend confirmation</div><div class="t2">Triggered on power purchase · immediate</div></div><span class="tag ok">Live</span></div>
+          <div class="row flat" style="margin-bottom:9px"><div><div class="t1">Payment received</div><div class="t2">Triggered on instalment / rent</div></div><span class="tag ok">Live</span></div>
+          <div class="row flat" style="margin-bottom:9px"><div><div class="t1">Low balance alert</div><div class="t2">Auto · meter below threshold</div></div><span class="tag ok">Live</span></div>
+          <div class="row flat" style="margin-bottom:9px"><div><div class="t1">Arrears reminder</div><div class="t2">Auto · 30 / 60 / 90 day cascade</div></div><span class="tag ok">Live</span></div>
+          <div class="row flat" style="margin-bottom:0"><div><div class="t1">OTP / login code</div><div class="t2">Triggered on MFA challenge</div></div><span class="tag ok">Live</span></div>
+        </div>
+        <div class="card"><h3><span class="ic">📡</span> Delivery log — live</h3>
+          <table>
+            <tr><th>Recipient</th><th>Template</th><th style="text-align:right">Status</th></tr>
+            <tr><td>+263 77••• 842</td><td style="color:var(--slate)">Token vend</td><td style="text-align:right"><span class="tag ok">Delivered</span></td></tr>
+            <tr><td>+263 71••• 109</td><td style="color:var(--slate)">Payment recv</td><td style="text-align:right"><span class="tag ok">Delivered</span></td></tr>
+            <tr><td>+44 7700••• 812</td><td style="color:var(--slate)">Reservation</td><td style="text-align:right"><span class="tag ok">Delivered</span></td></tr>
+            <tr><td>+263 78••• 330</td><td style="color:var(--slate)">Low balance</td><td style="text-align:right"><span class="tag pend">Sent</span></td></tr>
+            <tr><td>+263 77••• 455</td><td style="color:var(--slate)">Arrears 30d</td><td style="text-align:right"><span class="tag ok">Delivered</span></td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="card"><h3><span class="ic">📣</span> Send a broadcast</h3>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:200px"><div style="font-size:12px;font-weight:600;color:var(--slate);margin-bottom:6px">Audience</div><select style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--bg)"><option>All Kwekwe residents (3,847)</option><option>Arrears accounts (38)</option><option>Phase 2 only (1,184)</option><option>Commercial tenants (42)</option></select></div>
+          <div style="flex:1;min-width:200px"><div style="font-size:12px;font-weight:600;color:var(--slate);margin-bottom:6px">Template</div><select style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--bg)"><option>Scheduled maintenance notice</option><option>Payment reminder</option><option>Community announcement</option></select></div>
+          <button class="btn btn-p" onclick="alert('Demo: broadcast queued via Africa\'s Talking — batched at 1,000/job, sent async, delivery tracked. No messages sent in this demo.')">Queue broadcast</button>
+        </div>
+        <div style="background:var(--bg);border-radius:var(--rs);padding:13px;margin-top:16px;font-size:12px;color:var(--slate)">Broadcasts are queued asynchronously (BullMQ), batched to 1,000 recipients per job, and reach <b style="color:var(--ink)">every resident — smartphone or feature phone</b>, since SMS needs no app or data.</div>
+      </div>
+    </div>
+  </section>
+
+  </div>
+</div>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-bg" id="detailModal">
+  <div class="modal">
+    <div class="modal-hd"><div class="mt" id="dmTitle">Stand KW-2104</div><div class="ms" id="dmSub">Phase 2 · Available</div></div>
+    <div class="modal-bd">
+      <div class="mfield"><span class="k">Stand reference</span><span class="v" id="dmRef">KW-2104</span></div>
+      <div class="mfield"><span class="k">Size</span><span class="v" id="dmSize">400 m²</span></div>
+      <div class="mfield"><span class="k">Phase</span><span class="v" id="dmPhase">Phase 2</span></div>
+      <div class="mfield"><span class="k">Type</span><span class="v" id="dmType">Premium · corner</span></div>
+      <div class="mfield"><span class="k">Price</span><span class="v" id="dmPrice">$18,500</span></div>
+      <div class="mfield" style="border:none"><span class="k">Monthly (48mo)</span><span class="v" id="dmMonthly" style="color:var(--emerald-d)">$385/mo</span></div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn btn-o" style="flex:1" onclick="closeModal('detailModal')">Close</button>
+        <button class="btn btn-p" style="flex:1.4" onclick="toReserve()">Reserve this stand</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="reserveModal">
+  <div class="modal">
+    <div class="modal-hd resv"><div class="mt">Reserve <span id="rmRef">KW-2104</span></div><div class="ms">Staff reservation on behalf of a buyer</div></div>
+    <div class="modal-bd">
+      <div class="seg"><button class="on" id="segWalk" onclick="segPick('walk')">Walk-in / phone buyer</button><button id="segReg" onclick="segPick('reg')">Existing resident</button></div>
+      <div id="walkFields">
+        <div class="field"><label>Buyer full name</label><input value="Tariro Mpofu"></div>
+        <div class="field"><label>Country of residence</label><select><option>United Kingdom</option><option>South Africa</option><option>United States</option><option>Australia</option><option>Zimbabwe</option></select></div>
+        <div class="field"><label>Mobile (for SMS confirmation)</label><input value="+44 7700 900812"></div>
+      </div>
+      <div id="regFields" style="display:none">
+        <div class="field"><label>Search existing resident</label><input placeholder="Name, ID or stand ref..." value="Tendai Moyo · KW-1842"></div>
+      </div>
+      <div style="background:var(--gold-l);border-radius:var(--rs);padding:13px;font-size:12px;color:var(--gold-d);margin-bottom:6px">
+        <b>Reservation deposit: <span id="rmDep">$1,850</span></b> (10%) · holds the stand 14 days. Balance on a 48-month structured plan.
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn btn-o" style="flex:1" onclick="closeModal('reserveModal')">Cancel</button>
+        <button class="btn btn-p" style="flex:1.4" onclick="confirmReserve()">Confirm reservation</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="demo-tag">● Demo — sample data</div>
+
+<script>
+/* ---------- auth ---------- */
+function login(role,label,initials){
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').classList.add('live');
+  document.getElementById('roleSub').textContent=label;
+  document.getElementById('av1').textContent=initials;
+  if(role==='resident'){go('resident');}
+  else if(role==='exec'){go('exec');}
+  else if(role==='sales'){go('sales');}
+  else if(role==='contractor'){go('contractor');}
+  else if(role==='tenant'){go('tenant');}
+  else{go('staff');}
+  window.scrollTo(0,0);
+}
+function logout(){
+  document.getElementById('app').classList.remove('live');
+  document.getElementById('login').style.display='flex';
+  window.scrollTo(0,0);
+}
+
+/* ---------- nav ---------- */
+function go(s){
+  document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));
+  document.getElementById(s).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(e=>e.classList.toggle('active',e.dataset.s===s));
+  if(s==='sitemap'){renderEstate();}
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>go(n.dataset.s));
+
+/* ---------- site map: two real estates ---------- */
+const ESTATES={
+  kwekwe:{
+    title:'Site map — Kwekwe Estate',
+    sub:'33 ha mixed-use · 5,000-stand masterplan · surveyed blocks SR195/1999',
+    count:'1,153 available',
+    ref:'KW',
+    streets:['Chamvari Boulevard','Baobab Avenue','Msasa Close','Mopane Drive'],
+    phases:[
+      {id:2,name:'General estate',meta:'Masterplan · ~5,000 stands',pct:77,sold:'77% sold',avail:'1,153 available',availCol:'var(--emerald-d)',barCol:'var(--emerald)'},
+      {id:91,name:'Block A — Stands 6473–6502',meta:'30 surveyed stands · 4k–9.8k m²',pct:60,sold:'60% sold',avail:'12 available',availCol:'var(--gold-d)',barCol:'var(--gold)'},
+      {id:92,name:'Block B — Stands 7124–7182',meta:'59 surveyed stands · ~5k m²',pct:45,sold:'45% sold',avail:'32 available',availCol:'var(--sky-d)',barCol:'var(--sky)'}
+    ],
+    base:6473
+  },
+  tynwald:{
+    title:'Site map — Tynwald Township',
+    sub:'31.2 ha · 222 stands · Plan SD/WR/13/24 · stands 21959–22168 · 1.5 MW solar',
+    count:'168 available',
+    ref:'TYN',
+    streets:['12th Street','Tynwald Road','Kirkman Road','Open Space Way'],
+    phases:[
+      {id:11,name:'Residential 400 m²',meta:'130 stands · $32,000',pct:24,sold:'24% reserved/sold',avail:'99 available',availCol:'var(--emerald-d)',barCol:'var(--emerald)'},
+      {id:12,name:'Residential 540–600 m²',meta:'37 stands · $43k–$48k',pct:30,sold:'30% reserved/sold',avail:'26 available',availCol:'var(--gold-d)',barCol:'var(--gold)'},
+      {id:13,name:'Residential 800 m²',meta:'33 stands · $64,000 · premium',pct:18,sold:'18% reserved/sold',avail:'27 available',availCol:'var(--sky-d)',barCol:'var(--sky)'}
+    ],
+    base:21959
+  }
+};
+let curEstate='kwekwe', curPhase=null;
+
+function setEstate(e){
+  curEstate=e;
+  document.getElementById('estKwekwe').classList.toggle('on',e==='kwekwe');
+  document.getElementById('estTynwald').classList.toggle('on',e==='tynwald');
+  renderEstate();
+}
+function renderEstate(){
+  const E=ESTATES[curEstate];
+  document.getElementById('mapTitle').textContent=E.title;
+  document.getElementById('mapSub').textContent=E.sub;
+  document.getElementById('mapCount').textContent=E.count;
+  const pc=document.getElementById('phaseCards');
+  pc.innerHTML='';
+  E.phases.forEach((ph,idx)=>{
+    const d=document.createElement('div');
+    d.className='phase'+(idx===0?' sel':'');
+    d.innerHTML='<div class="pn">'+ph.name+'</div><div class="pmeta">'+ph.meta+'</div>'+
+      '<div class="phase-bar"><i style="display:block;height:100%;width:'+ph.pct+'%;background:'+ph.barCol+';border-radius:4px"></i></div>'+
+      '<div class="phase-stat"><span>'+ph.sold+'</span><span style="font-weight:700;color:'+ph.availCol+'">'+ph.avail+'</span></div>';
+    d.onclick=()=>selPhase(ph.id,d);
+    pc.appendChild(d);
+  });
+  curPhase=E.phases[0].id;
+  document.getElementById('gridTitle').textContent=E.phases[0].name+' — plot layout';
+  renderGrid(E.phases[0].id);
+}
+function selPhase(p,el){
+  document.querySelectorAll('.phase').forEach(e=>e.classList.remove('sel'));
+  if(el)el.classList.add('sel');
+  curPhase=p;
+  const ph=ESTATES[curEstate].phases.find(x=>x.id===p);
+  document.getElementById('gridTitle').textContent=ph.name+' — plot layout';
+  renderGrid(p);
+}
+function renderGrid(phase){
+  const E=ESTATES[curEstate];
+  const roads=document.getElementById('roads');
+  roads.innerHTML='';
+  let seed=phase*97+(curEstate==='tynwald'?500:0);
+  const rnd=()=>{seed=(seed*9301+49297)%233280;return seed/233280;};
+  let counter=0, total=0;
+  E.streets.forEach((st,si)=>{
+    const lbl=document.createElement('div');lbl.className='road-label';lbl.textContent='⎯ '+st+' ⎯';roads.appendChild(lbl);
+    const row=document.createElement('div');row.className='plot-row';
+    let perRow=12;
+    let cap=999;
+    if(curEstate==='kwekwe'&&phase===91)cap=30;
+    else if(curEstate==='kwekwe'&&phase===92)cap=59;
+    for(let i=0;i<perRow;i++){
+      if(total>=cap)break;
+      counter++;
+      let num;
+      if(curEstate==='kwekwe'&&phase===91)num=6472+counter;
+      else if(curEstate==='kwekwe'&&phase===92)num=7123+counter;
+      else if(curEstate==='tynwald')num=21958+(phase-11)*70+counter;
+      else num=E.base+(phase*40)+counter;
+      const ref=E.ref+'-'+num;
+      const r=rnd();
+      let cls,status,size,price,mo;
+      if(curEstate==='kwekwe'){
+        if(phase===2){
+          // General estate — representative masterplan grid
+          if(r<0.6){cls='sold';status='Sold'} else if(r<0.72){cls='resv';status='Reserved'} else if(r<0.85){cls='prem';status='Premium'} else {cls='avail';status='Available'}
+          size=cls==='prem'?'500':(r<0.4?'300':'400');
+          price=size==='500'?'22,000':(size==='400'?'18,500':'12,800');
+          mo=size==='500'?'458':(size==='400'?'385':'267');
+        } else {
+          // Real surveyed blocks — large stands at $32/sqm
+          if(r<0.45){cls='sold';status='Sold'} else if(r<0.62){cls='resv';status='Reserved'} else {cls='avail';status='Available'}
+          if(phase===91){ // Stands 6473–6502, 4k–9.8k m²
+            const sizes=[4728,5092,4777,4638,5525,4255,5247,4292,4846,4197,4795,4345,8161];
+            const sqm=sizes[Math.floor(r*sizes.length)%sizes.length];
+            size=String(sqm); price=(sqm*32).toLocaleString(); mo=Math.round(sqm*32/48).toLocaleString();
+            if(sqm>7000&&cls==='avail')cls='prem';
+          } else { // Block B 7124–7182, ~5k m²
+            const sqm=r<0.5?5420:5000;
+            size=String(sqm); price=(sqm*32).toLocaleString(); mo=Math.round(sqm*32/48).toLocaleString();
+          }
+        }
+      } else {
+        // Tynwald: early-stage, mostly available, some reserved/sold. Sizes per phase band.
+        if(r<0.14){cls='sold';status='Sold'} else if(r<0.30){cls='resv';status='Reserved'} else {cls='avail';status='Available'}
+        if(phase===11){size='400';price='32,000';mo='667'}
+        else if(phase===12){ if(r<0.5){size='540';price='43,200';mo='900'} else {size='600';price='48,000';mo='1,000'} }
+        else {size='800';price='64,000';mo='1,333'; if(cls==='avail')cls='prem'}
+      }
+      total++;
+      const p=document.createElement('div');
+      p.className='plot '+cls;
+      p.textContent=String(num).slice(-3);
+      if(cls!=='sold'){
+        p.onclick=()=>openDetail(ref,size,price,mo,(curEstate==='tynwald'?'Tynwald':'Kwekwe')+' · '+(ESTATES[curEstate].phases.find(x=>x.id===phase).name),status==='Premium'||cls==='prem'?'Premium':status,p);
+        p.title=ref+' · '+status;
+      }else{p.title=ref+' · Sold'}
+      row.appendChild(p);
+    }
+    if(row.children.length)roads.appendChild(row); else lbl.remove();
+  });
+  document.getElementById('gridCount').textContent='Showing '+total+' stands';
+}
+
+/* ---------- detail + reserve ---------- */
+let cur={};
+let selPlotEl=null;
+function openDetail(ref,size,price,mo,phase,status,el){
+  cur={ref,size,price,mo,phase,status};
+  if(selPlotEl)selPlotEl.classList.remove('sel');
+  if(el){el.classList.add('sel');selPlotEl=el;}
+  document.getElementById('dmTitle').textContent='Stand '+ref;
+  document.getElementById('dmSub').textContent=phase+' · '+status;
+  document.getElementById('dmRef').textContent=ref;
+  document.getElementById('dmSize').textContent=size+' m²';
+  document.getElementById('dmPhase').textContent=phase;
+  document.getElementById('dmType').textContent=status==='Premium'?'Premium · corner':'Standard';
+  document.getElementById('dmPrice').textContent='$'+price;
+  document.getElementById('dmMonthly').textContent='$'+mo+'/mo';
+  document.getElementById('detailModal').classList.add('show');
+}
+function openReserve(ref,size,price,mo,type){
+  cur={ref,size,price,mo,phase:'Phase 2',status:type};
+  document.getElementById('rmRef').textContent=ref;
+  document.getElementById('rmDep').textContent='$'+Math.round(price*0.1).toLocaleString();
+  document.getElementById('reserveModal').classList.add('show');
+}
+function toReserve(){
+  closeModal('detailModal');
+  document.getElementById('rmRef').textContent=cur.ref;
+  document.getElementById('rmDep').textContent='$'+Math.round(parseInt(cur.price.replace(/,/g,''))*0.1).toLocaleString();
+  document.getElementById('reserveModal').classList.add('show');
+}
+function segPick(t){
+  document.getElementById('segWalk').classList.toggle('on',t==='walk');
+  document.getElementById('segReg').classList.toggle('on',t==='reg');
+  document.getElementById('walkFields').style.display=t==='walk'?'block':'none';
+  document.getElementById('regFields').style.display=t==='reg'?'block':'none';
+}
+function confirmReserve(){
+  closeModal('reserveModal');
+  if(selPlotEl){selPlotEl.classList.remove('avail','prem');selPlotEl.classList.add('resv');selPlotEl.classList.remove('sel');}
+  alert('✅ Reservation confirmed for stand '+cur.ref+'.\n\n• Stand marked Reserved on the site map\n• 14-day hold applied\n• Confirmation SMS sent to the buyer\n• Draft instalment schedule generated\n• Reservation logged to audit trail');
+}
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.modal-bg').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('show')});
+
+/* ---------- ussd ---------- */
+const ussdMenu='CON Welcome to InfraCo\n1. Check balance\n2. Buy electricity token\n3. Buy data bundle\n4. Pay instalment\n5. My account';
+function scr(){return document.getElementById('ussdScr')}
+function ussdReset(){scr().textContent=ussdMenu;document.getElementById('ussdIn').value='';}
+function ussdSend(){
+  const v=document.getElementById('ussdIn').value.trim();document.getElementById('ussdIn').value='';
+  let r;
+  if(v==='1')r='END Tendai Moyo\nWallet: USD 45.80\nPower: 12.4 kWh remaining\nData: 1.2 GB';
+  else if(v==='2')r='CON Buy electricity token\nEnter amount in USD (min $1):';
+  else if(v==='3')r='CON Easy Mobile bundles:\n1. Daily 100MB - $0.50\n2. Weekly 500MB - $2.00\n3. Monthly 2GB - $7.00';
+  else if(v==='4')r='CON Pay instalment\nStand KW-1842\nBalance due: $320.00\n1. Pay now\n2. Cancel';
+  else if(v==='5')r='END Stand KW-1842\nTendai Moyo\nInstalment 14 of 48\nNext due: Jun 25';
+  else if(v==='10'||v==='15'||v==='20')r='END Token purchased!\n'+(v*10)+' kWh\nToken: 4821 7733 0192 5567\nSMS sent to your phone.';
+  else r='END Processing... You will receive an SMS confirmation shortly.';
+  scr().textContent=r;
+}
+ussdReset();
+</script>
+</body>
+</html>
