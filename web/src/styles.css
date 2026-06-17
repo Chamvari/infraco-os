@@ -367,3 +367,55 @@ code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
 }
+
+/* Auth — login screen */
+.login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 28px;
+  box-shadow: 0 6px 24px rgba(27, 39, 51, 0.06);
+}
+.login-brand {
+  font-size: 20px;
+  margin-bottom: 2px;
+}
+
+/* Auth — topbar session chip */
+.session {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.session-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
+}
+.session-role {
+  background: #eef2f6;
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.empty-role {
+  text-align: center;
+  padding: 48px 24px;
+}
+.empty-role h1 {
+  margin-bottom: 8px;
+}

@@ -23,8 +23,8 @@ function polygonLatLngs(geom: PlotGeometry | null): [number, number][] {
   return geom.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]);
 }
 
-/** Builds a popup DOM node with plot detail + a working Reserve button. */
-function buildPopup(p: Plot, onReserve: (id: string) => void): HTMLElement {
+/** Builds a popup DOM node with plot detail + a Reserve button (when allowed). */
+function buildPopup(p: Plot, onReserve?: (id: string) => void): HTMLElement {
   const el = document.createElement('div');
   el.className = 'popup';
   const price = p.price != null ? `<div class="popup-row">${p.currency} ${p.price.toLocaleString()}</div>` : '';
@@ -36,7 +36,7 @@ function buildPopup(p: Plot, onReserve: (id: string) => void): HTMLElement {
     `<div class="popup-row">${p.development}</div>` +
     `<div class="popup-row">${p.plotType}${area}</div>` +
     price;
-  if (p.status === 'available') {
+  if (p.status === 'available' && onReserve) {
     const btn = document.createElement('button');
     btn.className = 'btn small';
     btn.textContent = 'Reserve';
@@ -55,7 +55,7 @@ function PolygonLayer({
   onReserve,
 }: {
   plots: Plot[];
-  onReserve: (id: string) => void;
+  onReserve?: (id: string) => void;
 }) {
   const map = useMap();
   useEffect(() => {
@@ -106,7 +106,7 @@ function FitBounds({ points }: { points: [number, number][] }) {
  * geometry exists, otherwise as GPS markers. Colour-coded by live allocation
  * status, clickable to inspect or reserve. Base tiles from OpenStreetMap.
  */
-export function MapView({ onReserve }: { onReserve: (plotId: string) => void }) {
+export function MapView({ onReserve }: { onReserve?: (plotId: string) => void }) {
   const [plots, setPlots] = useState<Plot[] | null>(null);
   const [filter, setFilter] = useState<(typeof STATUSES)[number]>('all');
   const [error, setError] = useState<string | null>(null);
@@ -207,7 +207,7 @@ export function MapView({ onReserve }: { onReserve: (plotId: string) => void }) 
                       {p.currency} {p.price.toLocaleString()}
                     </div>
                   )}
-                  {p.status === 'available' && (
+                  {p.status === 'available' && onReserve && (
                     <button className="btn small" onClick={() => onReserve(p.plotId)}>
                       Reserve
                     </button>

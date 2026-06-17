@@ -15,7 +15,9 @@ const area = (p: Plot) =>
  * behind the GIS map (GIS-001). Available plots can be reserved straight from
  * the list, which hands the plot to the reservation form.
  */
-export function PlotInventory({ onReserve }: { onReserve: (plotId: string) => void }) {
+// onReserve is omitted when the signed-in user lacks the reserve (sales)
+// capability — the Reserve button is then hidden entirely.
+export function PlotInventory({ onReserve }: { onReserve?: (plotId: string) => void }) {
   const [plots, setPlots] = useState<Plot[] | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +96,7 @@ export function PlotInventory({ onReserve }: { onReserve: (plotId: string) => vo
                     <span className={`status status-${p.status}`}>{p.status}</span>
                   </td>
                   <td className="num">
-                    {p.status === 'available' && (
+                    {p.status === 'available' && onReserve && (
                       <button className="btn small" onClick={() => onReserve(p.plotId)}>
                         Reserve
                       </button>

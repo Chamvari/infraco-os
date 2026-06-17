@@ -1,7 +1,20 @@
 /**
- * Tiny fetch helpers. All URLs are same-origin paths; Vite proxies /plots and
- * /api to the NestJS backend on :3000 (see vite.config.ts).
+ * Tiny fetch helpers. All URLs are same-origin paths; Vite proxies /auth,
+ * /plots, /leases and /api to the NestJS backend on :3000 (see vite.config.ts).
+ *
+ * Every request carries the bearer token from the session store (Module Z
+ * requires it on all routes except /auth/login). A 401 means the token is
+ * missing/expired, so we clear the session — the AuthProvider reacts and bounces
+ * the user back to the login screen.
  */
+import { clearSession, getToken, type SessionUser } from './session';
+
+// -- Auth (Module Z) ----------------------------------------------------------
+
+export interface LoginResponse {
+  accessToken: string;
+  user: SessionUser;
+}
 
 export interface ArrearsBucket {
   bucket: string;
@@ -117,9 +130,23 @@ export interface LeaseStatement {
   maintenance: MaintenanceRequest[];
 }
 
+/** Builds request headers, attaching the bearer token when we have one. */
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { Accept: 'application/json', ...extra };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+/** Clears the session on 401 so the app falls back to the login screen. */
+function handleUnauthorized(res: Response): void {
+  if (res.status === 401) clearSession();
+}
+
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) {
+    handleUnauthorized(res);
     throw new Error(await errorMessage(res));
   }
   return res.json() as Promise<T>;
@@ -128,10 +155,11 @@ async function getJson<T>(url: string): Promise<T> {
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
   });
   if (!res.ok) {
+    handleUnauthorized(res);
     throw new Error(await errorMessage(res));
   }
   return res.json() as Promise<T>;
@@ -149,6 +177,8 @@ async function errorMessage(res: Response): Promise<string> {
 }
 
 export const api = {
+  login: (username: string, password: string) =>
+    postJson<LoginResponse>('/auth/login', { username, password }),
   arrearsAgeing: () => getJson<ArrearsBucket[]>('/api/finance/arrears-ageing'),
   topDebtors: () => getJson<Debtor[]>('/api/finance/top-debtors'),
   listPlots: (status?: string) =>
