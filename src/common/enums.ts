@@ -147,3 +147,8 @@ export const LEASE_STATUSES = [
   'terminated',
 ] as const;
 export type LeaseStatus = (typeof LEASE_STATUSES)[number];
+
+// core.approval_status — Delegation-of-Authority workflow (PLAT-AUTH-005)
+// initiate → pending → approved/rejected → execute(d)
+export const APPROVAL_STATUSES = ['pending', 'approved', 'rejected', 'executed'] as const;
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
