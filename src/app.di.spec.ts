@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bullmq';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma.service';
 import { FinancialService } from './modules/financial/financial.service';
@@ -8,7 +9,8 @@ import { PaymentsService } from './modules/payments/payments.service';
 /**
  * Verifies the DI graph compiles — in particular the Module A <-> Module H
  * circular dependency resolved with forwardRef. PrismaService is mocked so no
- * database connection is attempted.
+ * database connection is attempted, and the BullMQ 'notifications' queue is
+ * mocked so no Redis connection is attempted.
  */
 describe('Application DI graph', () => {
   it('resolves Module A and Module H services through forwardRef', async () => {
@@ -22,6 +24,8 @@ describe('Application DI graph', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
+      .overrideProvider(getQueueToken('notifications'))
+      .useValue({ add: jest.fn() })
       .compile();
 
     expect(moduleRef.get(FinancialService, { strict: false })).toBeInstanceOf(

@@ -26,11 +26,11 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | **F — Document Layer**        | 0  | 2  | 3  | 5  | 0 / 5   |
 | **G — Portals**               | 0  | 3  | 13 | 16 | 0 / 10  |
 | **H — Payments Integration**  | 1  | 5  | 2  | 8  | 1 / 6   |
-| **Z — Platform Services**     | 5  | 6  | 2  | 13 | 5 / 7   |
+| **Z — Platform Services**     | 6  | 5  | 2  | 13 | 5 / 7   |
 | **NFRs**                      | 0  | 7  | 4  | 11 | 0 / 7   |
-| **TOTAL**                     | **60** | **69** | **70** | **202** | **50 / 133** |
+| **TOTAL**                     | **61** | **68** | **70** | **202** | **50 / 133** |
 
-- **Fully met:** 60 / 202 ≈ **30%**
+- **Fully met:** 61 / 202 ≈ **30%**
 - **Met or partial:** 129 / 202 ≈ **64%**
 - **Must-have requirements fully met:** 50 / 133 ≈ **38%**
 
@@ -297,7 +297,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | PAY-API-007 | Should | Partial | customer.service.ts:160-181 | stores wallet_id; no POST /wallets to platform |
 | PAY-API-008 | Must | Partial | payments.service.ts:35-42 | **HMAC computed but never enforced**; api_log never written |
 
-### Module Z — Shared Platform Services  (5 Met / 6 Partial / 2 Unmet; Musts 5/7)
+### Module Z — Shared Platform Services  (6 Met / 5 Partial / 2 Unmet; Musts 5/7)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
@@ -309,8 +309,8 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | PLAT-AUDIT-001 | Must | Met | schema.sql:204-232; prisma.service.ts:24-39 | capture_audit trigger + actor context |
 | PLAT-AUDIT-002 | Must | Met | schema.sql:178-200 | append-only/immutable (UPDATE/DELETE blocked) |
 | PLAT-AUDIT-003 | Must | Partial | roles.ts:49,53 | audit roles exist; no audit-log search/export endpoint |
-| PLAT-NOTIF-001 | Should | Partial | schema.sql:234-246; arrears.service.ts:118-132 | only arrears queued; no delivery; most events unwired |
-| PLAT-NOTIF-002 | Should | Partial | schema.sql:242-243 | status cols exist; rows stay 'queued' |
+| PLAT-NOTIF-001 | Should | Partial | notifications.service.ts; notifications.module.ts | SMS+USSD delivery (Africa's Talking) + 13 event templates + async queue; email/WhatsApp absent, domain events not yet auto-wired |
+| PLAT-NOTIF-002 | Should | Met | notifications.service.ts (recordNotification/recordDeliveryResult/recordDeliveryReport); notifications.controller.ts:DLR | writes core.notification; status queued→sent/failed via processor + AT delivery-report webhook |
 | PLAT-RPT-001 | Must | Partial | reporting.service.ts:29-105 | only ageing + top debtors; most KPIs absent |
 | PLAT-RPT-002 | Should | Partial | web/App.tsx; web/roles.ts | role-gated tabs hardcoded; not configurable |
 | PLAT-RPT-003 | Should | Unmet | — | no CSV/PDF export |
