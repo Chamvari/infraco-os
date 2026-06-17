@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { LedgerService } from './ledger.service';
+import { AccountingService } from './accounting.service';
 import { PrismaService } from '../../prisma.service';
 
 /**
@@ -14,6 +15,7 @@ describe('LedgerService', () => {
   let service: LedgerService;
   let tx: { $queryRawUnsafe: jest.Mock; $executeRawUnsafe: jest.Mock };
   let prisma: { $queryRawUnsafe: jest.Mock; withActor: jest.Mock };
+  let accounting: { postJournalTx: jest.Mock };
 
   const actor = { actorId: 'user-1', actorRole: 'finance' };
 
@@ -28,7 +30,11 @@ describe('LedgerService', () => {
         (_a: string, _r: string, fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
       ),
     };
-    service = new LedgerService(prisma as unknown as PrismaService);
+    accounting = { postJournalTx: jest.fn().mockResolvedValue({ journalId: 'jrnl-1' }) };
+    service = new LedgerService(
+      prisma as unknown as PrismaService,
+      accounting as unknown as AccountingService,
+    );
   });
 
   const payParams = (amount: number) => ({

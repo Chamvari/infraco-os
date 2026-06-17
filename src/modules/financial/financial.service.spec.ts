@@ -3,6 +3,7 @@ import { FinancialService, GenerateScheduleParams } from './financial.service';
 import { PrismaService } from '../../prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { LedgerService } from './ledger.service';
+import { AccountingService } from './accounting.service';
 
 /**
  * Unit tests for FinancialService (FIN-INST-001..003/005).
@@ -16,6 +17,7 @@ describe('FinancialService', () => {
   let prisma: { $queryRawUnsafe: jest.Mock; withActor: jest.Mock };
   let payments: { createBill: jest.Mock };
   let ledger: { recomputeAccount: jest.Mock };
+  let accounting: { postJournalTx: jest.Mock };
 
   const actor = { actorId: 'user-1', actorRole: 'finance' };
 
@@ -45,10 +47,12 @@ describe('FinancialService', () => {
     };
     payments = { createBill: jest.fn().mockResolvedValue({ billRef: 'x' }) };
     ledger = { recomputeAccount: jest.fn().mockResolvedValue({}) };
+    accounting = { postJournalTx: jest.fn().mockResolvedValue({ journalId: 'jrnl-1' }) };
     service = new FinancialService(
       prisma as unknown as PrismaService,
       payments as unknown as PaymentsService,
       ledger as unknown as LedgerService,
+      accounting as unknown as AccountingService,
     );
   });
 

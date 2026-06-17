@@ -2,6 +2,8 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { LedgerService, TxClient } from './ledger.service';
+import { AccountingService } from './accounting.service';
+import { COA, assetClassForAccountType, revenueCoaForInvoice } from './coa-map';
 import { CURRENCY_CODES, CurrencyCode } from '../../common/enums';
 import {
   computeInstalmentAmounts,
@@ -46,6 +48,7 @@ export class FinancialService {
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
     private readonly ledger: LedgerService,
+    private readonly accounting: AccountingService,
   ) {}
 
   /**
@@ -195,9 +198,18 @@ export class FinancialService {
     const asOfDate = asOf.toISOString().slice(0, 10);
 
     const due = await this.prisma.$queryRawUnsafe<
-      { invoice_id: string; account_id: string; reference: string; customer_id: string }[]
+      {
+        invoice_id: string;
+        account_id: string;
+        reference: string;
+        customer_id: string;
+        amount: string;
+        invoice_type: string;
+        account_type: string;
+      }[]
     >(
-      `SELECT i.invoice_id, i.account_id, i.reference, a.customer_id
+      `SELECT i.invoice_id, i.account_id, i.reference, a.customer_id,
+              i.amount::text AS amount, i.invoice_type, a.account_type
          FROM fin.invoice i
          JOIN fin.account a ON a.account_id = i.account_id
         WHERE i.invoice_type = 'instalment'
@@ -223,6 +235,25 @@ export class FinancialService {
           inv.customer_id,
           JSON.stringify({ invoiceRef: inv.reference }),
         );
+
+        // FIN-ACC-002 — recognise revenue on issue (accrual): debtor up,
+        // revenue up, tagged with the buyer's asset class for the P&L.
+        const assetClass = assetClassForAccountType(inv.account_type);
+        await this.accounting.postJournalTx(tx as TxClient, {
+          journalDate: asOfDate,
+          narrative: `Invoice ${inv.reference} issued`,
+          sourceTable: 'invoice',
+          sourceId: inv.invoice_id,
+          postedBy: params.actorId || null,
+          lines: [
+            { coaCode: COA.RECEIVABLES, assetClass, debit: Number(inv.amount) },
+            {
+              coaCode: revenueCoaForInvoice(inv.invoice_type, assetClass),
+              assetClass,
+              credit: Number(inv.amount),
+            },
+          ],
+        });
       });
 
       // Module H owns the Payments Platform call (PAY-API-001 / FIN-INST-003).

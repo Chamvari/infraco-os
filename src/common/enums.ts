@@ -35,6 +35,34 @@ export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
 export const CURRENCY_CODES = ['USD', 'ZIG', 'GBP', 'ZAR', 'EUR', 'AUD'] as const;
 export type CurrencyCode = (typeof CURRENCY_CODES)[number];
 
+// fin.account_class — accounting-layer COA classification (FIN-ACC-001)
+export const ACCOUNT_CLASSES = [
+  'asset',
+  'liability',
+  'equity',
+  'revenue',
+  'cogs',
+  'opex',
+  'capex',
+  'finance_cost',
+] as const;
+export type AccountClass = (typeof ACCOUNT_CLASSES)[number];
+
+// fin.asset_class — P&L / balance-sheet segmentation by asset class (FIN-ACC-001/003)
+export const ASSET_CLASSES = [
+  'residential',
+  'agro',
+  'commercial',
+  'utilities',
+  'projects',
+  'group',
+] as const;
+export type AssetClass = (typeof ASSET_CLASSES)[number];
+
+// fin.period_status — accounting period lifecycle (FIN-ACC-007)
+export const PERIOD_STATUSES = ['open', 'locked', 'closed'] as const;
+export type PeriodStatus = (typeof PERIOD_STATUSES)[number];
+
 // sales.plot_status
 export const PLOT_STATUSES = [
   'available',
