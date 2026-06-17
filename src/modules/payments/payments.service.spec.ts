@@ -10,7 +10,7 @@ import { LedgerService } from '../financial/ledger.service';
 describe('PaymentsService.handleCallback', () => {
   let service: PaymentsService;
   let tx: { $queryRawUnsafe: jest.Mock; $executeRawUnsafe: jest.Mock };
-  let prisma: { withActor: jest.Mock };
+  let prisma: { withActor: jest.Mock; $queryRawUnsafe: jest.Mock };
   let ledger: {
     postPaymentTx: jest.Mock;
     parkSuspenseTx: jest.Mock;
@@ -20,6 +20,7 @@ describe('PaymentsService.handleCallback', () => {
     vendFromCallbackTx: jest.Mock;
     purchaseLteFromCallbackTx: jest.Mock;
   };
+  let platform: { createBill: jest.Mock; isConfigured: jest.Mock };
 
   const callback = (over: Record<string, unknown> = {}) => ({
     platform_txn_id: 'TX-1',
@@ -41,6 +42,7 @@ describe('PaymentsService.handleCallback', () => {
         (_a: string | null, _r: string, fn: (t: typeof tx) => Promise<unknown>) =>
           fn(tx),
       ),
+      $queryRawUnsafe: jest.fn().mockResolvedValue([]),
     };
     ledger = {
       postPaymentTx: jest.fn(),
@@ -51,10 +53,15 @@ describe('PaymentsService.handleCallback', () => {
       vendFromCallbackTx: jest.fn().mockResolvedValue({ vendId: 'v-1', duplicate: false }),
       purchaseLteFromCallbackTx: jest.fn().mockResolvedValue({ purchaseId: 'p-1', duplicate: false }),
     };
+    platform = {
+      createBill: jest.fn().mockResolvedValue({ ok: false, configured: false }),
+      isConfigured: jest.fn().mockReturnValue(false),
+    };
     service = new PaymentsService(
       prisma as unknown as PrismaService,
       ledger as unknown as LedgerService,
       utility as unknown as import('../utility/utility.service').UtilityService,
+      platform as unknown as import('./payments-platform.client').PaymentsPlatformClient,
     );
   });
 
@@ -156,6 +163,66 @@ describe('PaymentsService.handleCallback', () => {
     );
     expect(mark).toBeDefined();
     expect(ledger.recomputeAccount).not.toHaveBeenCalled();
+  });
+
+  // -- PAY-API-001/002/004: outbound bill creation ----------------------------
+
+  const invoiceRow = {
+    invoice_id: 'inv-1',
+    reference: 'INV-AAA-001',
+    amount: '1000',
+    currency: 'USD',
+    due_date: '2026-07-01',
+    description: 'Instalment 1 of 12',
+    wallet_id: 'wal-1',
+  };
+
+  it('createBill: pushes to the platform, stores platform id, logs sent', async () => {
+    prisma.$queryRawUnsafe.mockResolvedValue([invoiceRow]);
+    platform.createBill.mockResolvedValue({
+      ok: true,
+      configured: true,
+      httpStatus: 200,
+      platformBillId: 'PB-1',
+      shortCodeOrQr: '*123#',
+    });
+
+    const res = await service.createBill('inv-1', 'u-fin');
+
+    expect(res).toEqual({ billRef: 'INV-AAA-001', platformBillId: 'PB-1', pushed: true });
+    expect(platform.createBill).toHaveBeenCalledWith(
+      expect.objectContaining({ bill_ref: 'INV-AAA-001', amount: 1000, customer_wallet_id: 'wal-1' }),
+    );
+    const billInsert = tx.$executeRawUnsafe.mock.calls.find((c) =>
+      String(c[0]).includes('INSERT INTO pay.bill'),
+    );
+    expect(billInsert).toBeDefined();
+    const invUpd = tx.$executeRawUnsafe.mock.calls.find((c) =>
+      String(c[0]).includes('UPDATE fin.invoice SET platform_bill_id'),
+    );
+    expect(invUpd).toBeDefined();
+    const apiLog = tx.$executeRawUnsafe.mock.calls.find((c) =>
+      String(c[0]).includes('INSERT INTO pay.api_log'),
+    );
+    expect(apiLog?.[4]).toBe('sent'); // status arg
+  });
+
+  it('createBill: degrades to local-only when no platform is configured', async () => {
+    prisma.$queryRawUnsafe.mockResolvedValue([{ ...invoiceRow, wallet_id: null }]);
+    platform.createBill.mockResolvedValue({ ok: false, configured: false });
+
+    const res = await service.createBill('inv-1', 'u-fin');
+
+    expect(res).toEqual({ billRef: 'INV-AAA-001', platformBillId: null, pushed: false });
+    const apiLog = tx.$executeRawUnsafe.mock.calls.find((c) =>
+      String(c[0]).includes('INSERT INTO pay.api_log'),
+    );
+    expect(apiLog?.[4]).toBe('skipped_unconfigured');
+    // no platform id → no invoice update
+    const invUpd = tx.$executeRawUnsafe.mock.calls.find((c) =>
+      String(c[0]).includes('UPDATE fin.invoice SET platform_bill_id'),
+    );
+    expect(invUpd).toBeUndefined();
   });
 
   // -- Module D routing (UTIL-TKN-001 / UTIL-LTE-003) -------------------------

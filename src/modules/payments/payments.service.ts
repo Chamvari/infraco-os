@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma.service';
 import { LedgerService } from '../financial/ledger.service';
 import { UtilityService } from '../utility/utility.service';
 import { CurrencyCode } from '../../common/enums';
+import { PaymentsPlatformClient } from './payments-platform.client';
 
 /**
  * PaymentsService — Module H (Payments API Integration).
@@ -29,6 +30,8 @@ export class PaymentsService {
     // Module D: a callback whose purpose is a utility vend / LTE purchase is
     // routed here so it commits atomically with the callback record.
     private readonly utility: UtilityService,
+    // Outbound bill creation (PAY-API-001/002/004).
+    private readonly platform: PaymentsPlatformClient,
   ) {}
 
   /** PAY-API-008: verify the HMAC signature on an inbound callback. */
@@ -41,29 +44,86 @@ export class PaymentsService {
     return a.length === b.length && timingSafeEqual(a, b);
   }
 
-  /** PAY-API-001: create a bill on the Payments Platform for an invoice. */
+  /**
+   * PAY-API-001/002/004: create a bill on the Payments Platform for an invoice.
+   * Pushes the bill per SRS §15.1 (bill_ref, amount, wallet, description,
+   * due_date, channels, callback_url), stores the returned platform_bill_id /
+   * short_code against the invoice, and logs the call to pay.api_log
+   * (PAY-API-008). Idempotent on bill_ref. Degrades to a local-only record when
+   * no platform is configured, so the instalment run never fails on this.
+   */
   async createBill(invoiceId: string, actorId: string) {
-    return this.prisma.withActor(actorId, 'finance', async (tx) => {
-      const inv = await tx.$queryRawUnsafe<any[]>(
-        `SELECT invoice_id, reference, amount, currency, due_date
-           FROM fin.invoice WHERE invoice_id = $1::uuid`,
-        invoiceId,
-      );
-      if (!inv.length) throw new Error('INVOICE_NOT_FOUND');
-      const i = inv[0];
+    const inv = await this.prisma.$queryRawUnsafe<any[]>(
+      `SELECT i.invoice_id::text AS invoice_id, i.reference, i.amount::text AS amount,
+              i.currency, i.due_date::text AS due_date,
+              COALESCE(i.description, i.reference) AS description,
+              c.wallet_id
+         FROM fin.invoice i
+         JOIN fin.account a  ON a.account_id  = i.account_id
+         JOIN fin.customer c ON c.customer_id = a.customer_id
+        WHERE i.invoice_id = $1::uuid`,
+      invoiceId,
+    );
+    if (!inv.length) throw new Error('INVOICE_NOT_FOUND');
+    const i = inv[0];
 
-      // TODO(EOS): POST to PAYMENTS_API_BASE_URL/bills per SRS §15.1, capture
-      // platform_bill_id / short_code / qr_payload from the response.
-      const platformBillId: string | null = null;
+    const channels = ['ussd', 'app', 'qr', 'agent', 'remittance', 'merchant'];
+    const callbackUrl = '/api/payments/callback';
 
-      await tx.$executeRawUnsafe(
-        `INSERT INTO pay.bill (invoice_id, bill_ref, platform_bill_id, amount, currency, status, callback_url)
-         VALUES ($1::uuid, $2, $3, $4, $5::fin.currency_code, 'created', $6)`,
-        i.invoice_id, i.reference, platformBillId, i.amount, i.currency,
-        '/api/payments/callback',
-      );
-      return { billRef: i.reference, platformBillId };
+    // PAY-API-002/004: push to the platform (wallet + channels + callback).
+    const pushed = await this.platform.createBill({
+      bill_ref: i.reference,
+      amount: Number(i.amount),
+      currency: i.currency,
+      customer_wallet_id: i.wallet_id ?? null,
+      description: i.description,
+      due_date: i.due_date,
+      channels,
+      callback_url: callbackUrl,
     });
+
+    const billStatus = pushed.ok ? 'sent' : 'created';
+    const platformBillId = pushed.platformBillId ?? null;
+    const shortCode = pushed.shortCodeOrQr ?? null;
+
+    await this.prisma.withActor(actorId, 'finance', async (tx) => {
+      // Idempotent on bill_ref: a re-push updates the existing row.
+      await tx.$executeRawUnsafe(
+        `INSERT INTO pay.bill
+           (invoice_id, bill_ref, platform_bill_id, amount, currency, channels, status, short_code, callback_url)
+         VALUES ($1::uuid, $2, $3, $4, $5::fin.currency_code, $6::text[], $7::pay.bill_status, $8, $9)
+         ON CONFLICT (bill_ref) DO UPDATE
+           SET platform_bill_id = COALESCE(EXCLUDED.platform_bill_id, pay.bill.platform_bill_id),
+               status = EXCLUDED.status, short_code = EXCLUDED.short_code, updated_at = now()`,
+        i.invoice_id, i.reference, platformBillId, i.amount, i.currency,
+        channels, billStatus, shortCode, callbackUrl,
+      );
+
+      // Store the platform id back on the invoice (the callback double-keys on it).
+      if (platformBillId) {
+        await tx.$executeRawUnsafe(
+          `UPDATE fin.invoice SET platform_bill_id = $2 WHERE invoice_id = $1::uuid`,
+          i.invoice_id, platformBillId,
+        );
+      }
+
+      // PAY-API-008: audit every outbound platform call (hash, never raw body).
+      const apiStatus = pushed.ok
+        ? 'sent'
+        : pushed.configured
+          ? 'failed'
+          : 'skipped_unconfigured';
+      await tx.$executeRawUnsafe(
+        `INSERT INTO pay.api_log (direction, endpoint, correlation_id, payload_hash, http_status, status)
+         VALUES ('out', '/bills', $1, $2, $3, $4)`,
+        i.reference,
+        createHash('sha256').update(JSON.stringify({ bill_ref: i.reference, amount: i.amount })).digest('hex'),
+        pushed.httpStatus ?? null,
+        apiStatus,
+      );
+    });
+
+    return { billRef: i.reference, platformBillId, pushed: pushed.ok };
   }
 
   /**
