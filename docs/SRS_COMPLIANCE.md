@@ -7,6 +7,8 @@ is **Met** only when real application code implements it — schema tables, DTOs
 comments, and TODO scaffolding alone do **not** count as Met (they score
 Partial at best). Status ∈ {Met, Partial, Unmet}.
 
+> **Aggregates are mechanically derived.** Every count in §1 (summary) and in each §3 module header is computed from the §3 per-requirement detail rows — the single source of truth. Do not hand-edit aggregate numbers; change the detail rows and re-derive. Last reconciled: 2026-06-17.
+
 > **Headline:** the system implements the *core revenue/operations spine*
 > (onboarding, instalments, ledger, arrears, leasing, prepaid utility vending,
 > auth/RBAC, audit) but is far from SRS-complete. A large amount of the schema
@@ -18,21 +20,21 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 
 | Module | Met | Partial | Unmet | Total | **Musts met** |
 |--------|----:|--------:|------:|------:|:-------------:|
-| **A — Financial Core**        | 30 | 5  | 10 | 45 | 22 / 35 |
-| **B — Sales Engine**          | 8  | 14 | 9  | 31 | 7 / 19  |
-| **C — Leasing & Tenancy**     | 7  | 2  | 2  | 11 | 6 / 8   |
-| **D — Utilities**             | 9  | 9  | 15 | 33 | 9 / 17  |
-| **E — Development/Project**   | 0  | 16 | 13 | 29 | 0 / 19  |
-| **F — Document Layer**        | 0  | 2  | 3  | 5  | 0 / 5   |
-| **G — Portals**               | 0  | 3  | 13 | 16 | 0 / 10  |
-| **H — Payments Integration**  | 1  | 5  | 2  | 8  | 1 / 6   |
-| **Z — Platform Services**     | 7  | 4  | 2  | 13 | 6 / 7   |
-| **NFRs**                      | 0  | 7  | 4  | 11 | 0 / 7   |
-| **TOTAL**                     | **62** | **67** | **73** | **202** | **51 / 133** |
+| **A — Financial Core**        | 34 | 4 | 10 | 48 | 28 / 37 |
+| **B — Sales Engine**          | 9 | 13 | 10 | 32 | 8 / 19 |
+| **C — Leasing & Tenancy**     | 7 | 2 | 2 | 11 | 6 / 8 |
+| **D — Utilities**             | 10 | 8 | 15 | 33 | 10 / 19 |
+| **E — Development/Project**   | 0 | 17 | 12 | 29 | 0 / 20 |
+| **F — Document Layer**        | 0 | 2 | 3 | 5 | 0 / 5 |
+| **G — Portals**               | 0 | 3 | 13 | 16 | 0 / 11 |
+| **H — Payments Integration**  | 1 | 5 | 2 | 8 | 1 / 7 |
+| **Z — Platform Services**     | 7 | 4 | 2 | 13 | 6 / 8 |
+| **NFRs**                      | 0 | 7 | 4 | 11 | 0 / 8 |
+| **TOTAL**                     | **68** | **65** | **73** | **206** | **59 / 142** |
 
-- **Fully met:** 62 / 202 ≈ **31%**
-- **Met or partial:** 129 / 202 ≈ **64%**
-- **Must-have requirements fully met:** 51 / 133 ≈ **38%**
+- **Fully met:** 68 / 206 ≈ **33%**
+- **Met or partial:** 133 / 206 ≈ **65%**
+- **Must-have requirements fully met:** 59 / 142 ≈ **42%**
 
 ### Maturity by SRS phase (§3.3)
 | Phase | Modules | State |
@@ -75,7 +77,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 
 ## 3. Per-module detail
 
-### Module A — Financial Core  (30 Met / 5 Partial / 10 Unmet; Musts 22/35)
+### Module A — Financial Core  (34 Met / 4 Partial / 10 Unmet; Musts 28/37)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
@@ -128,7 +130,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | FIN-ACC-009 | Must | Met | accounting.controller.ts:trial-balance/pnl/balance-sheet | Management accounts on demand for any period, filterable by asset class |
 | FIN-ACC-010 | Must | Unmet | — | Budget-vs-actuals needs Module E budgets (no app code) |
 
-### Module B — Sales Engine  (8 Met / 14 Partial / 9 Unmet; Musts 7/19)
+### Module B — Sales Engine  (9 Met / 13 Partial / 10 Unmet; Musts 8/19)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
@@ -181,7 +183,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | LEASE-MAINT-002 | Should | Unmet | — | no routing/SLA/auto-update logic |
 | LEASE-MAINT-003 | Should | Partial | lease.service.ts:836-856 | history searchable; no contractor work-order link |
 
-### Module D — Utilities  (9 Met / 9 Partial / 15 Unmet; Musts 9/17)
+### Module D — Utilities  (10 Met / 8 Partial / 15 Unmet; Musts 10/19)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
@@ -219,7 +221,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | UTIL-ASSET-002 | Should | Unmet | maintenance_schedule table only | no PM/work-order generation |
 | UTIL-ASSET-003 | Should | Unmet | — | no maintenance-history linkage |
 
-### Module E — Development & Project Control  (0 Met / 16 Partial / 13 Unmet; Musts 0/19)
+### Module E — Development & Project Control  (0 Met / 17 Partial / 12 Unmet; Musts 0/20)
 
 > **All "Partial" here means schema DDL exists with ZERO application logic** — no
 > service, controller, API, computation, workflow, or UI. Functionally unbuilt.
@@ -266,7 +268,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | DOC-004 | Must | Partial | onboarding.service.ts:108-116 | version auto-increment; no immutability enforcement |
 | DOC-005 | Must | Unmet | — | no object store; storage_ref is free text; no retention |
 
-### Module G — Customer & Staff Portals  (0 Met / 3 Partial / 13 Unmet; Musts 0/10)
+### Module G — Customer & Staff Portals  (0 Met / 3 Partial / 13 Unmet; Musts 0/11)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
@@ -287,7 +289,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | PORT-STAFF-004 | Must | Unmet | — | no development dashboard |
 | PORT-STAFF-005 | Must | Unmet | — | no executive/consolidated dashboard |
 
-### Module H — Payments API Integration  (1 Met / 5 Partial / 2 Unmet; Musts 1/6)
+### Module H — Payments API Integration  (1 Met / 5 Partial / 2 Unmet; Musts 1/7)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
@@ -300,7 +302,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | PAY-API-007 | Should | Partial | customer.service.ts:160-181 | stores wallet_id; no POST /wallets to platform |
 | PAY-API-008 | Must | Partial | payments.service.ts:35-42 | **HMAC computed but never enforced**; api_log never written |
 
-### Module Z — Shared Platform Services  (7 Met / 4 Partial / 2 Unmet; Musts 6/7)
+### Module Z — Shared Platform Services  (7 Met / 4 Partial / 2 Unmet; Musts 6/8)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
@@ -318,7 +320,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | PLAT-RPT-002 | Should | Partial | web/App.tsx; web/roles.ts | role-gated tabs hardcoded; not configurable |
 | PLAT-RPT-003 | Should | Unmet | — | no CSV/PDF export |
 
-### Non-Functional Requirements  (0 Met / 7 Partial / 4 Unmet; Musts 0/7)
+### Non-Functional Requirements  (0 Met / 7 Partial / 4 Unmet; Musts 0/8)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
