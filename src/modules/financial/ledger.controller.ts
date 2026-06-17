@@ -44,6 +44,10 @@ export class LedgerController {
   }
 
   // POST /ledger/adjustment  (FIN-LED-005 — dual authorisation + sensitive: MFA)
+  // Dual authorisation is governed by the DoA workflow (PLAT-AUTH-005): for a
+  // high-value adjustment the caller first initiates an approval (POST /approvals),
+  // a distinct second signatory approves it, and the resulting approvalId is
+  // supplied here. Below-threshold adjustments need no approvalId.
   @Roles(...ROLE_GROUPS.finance_senior)
   @Mfa()
   @Post('ledger/adjustment')
@@ -58,10 +62,7 @@ export class LedgerController {
       kind: 'credit_note' | 'write_off' | 'correction';
       currency?: 'USD' | 'ZIG' | 'GBP' | 'ZAR' | 'EUR' | 'AUD';
       narrative: string;
-      // The second-approver (dual authorisation) is a distinct principal from the
-      // actor; it stays in the body. The ACTOR who posts is the token holder.
-      authoriserId: string;
-      authoriserRole: string;
+      approvalId?: string;
     },
   ) {
     return this.ledger.postManualAdjustment(
@@ -73,8 +74,7 @@ export class LedgerController {
         kind: body.kind,
         currency: body.currency,
         narrative: body.narrative,
-        authoriserId: body.authoriserId,
-        authoriserRole: body.authoriserRole,
+        approvalId: body.approvalId,
       },
       { actorId: user.actorId, actorRole: user.actorRole },
     );
