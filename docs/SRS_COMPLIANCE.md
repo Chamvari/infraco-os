@@ -26,13 +26,13 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | **F — Document Layer**        | 0  | 2  | 3  | 5  | 0 / 5   |
 | **G — Portals**               | 0  | 3  | 13 | 16 | 0 / 10  |
 | **H — Payments Integration**  | 1  | 5  | 2  | 8  | 1 / 6   |
-| **Z — Platform Services**     | 4  | 7  | 2  | 13 | 4 / 7   |
+| **Z — Platform Services**     | 5  | 6  | 2  | 13 | 5 / 7   |
 | **NFRs**                      | 0  | 7  | 4  | 11 | 0 / 7   |
-| **TOTAL**                     | **59** | **70** | **70** | **202** | **49 / 133** |
+| **TOTAL**                     | **60** | **69** | **70** | **202** | **50 / 133** |
 
-- **Fully met:** 59 / 202 ≈ **29%**
+- **Fully met:** 60 / 202 ≈ **30%**
 - **Met or partial:** 129 / 202 ≈ **64%**
-- **Must-have requirements fully met:** 49 / 133 ≈ **37%**
+- **Must-have requirements fully met:** 50 / 133 ≈ **38%**
 
 ### Maturity by SRS phase (§3.3)
 | Phase | Modules | State |
@@ -59,8 +59,10 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
    (FIN-ACC-010, blocked on Module E budgets).
 4. **🟠 Outbound bill creation is a TODO (PAY-API-001/002/004).** Bills are
    written to `pay.bill` locally but never pushed to the Payments Platform.
-5. **🟡 MFA is a passive flag (PLAT-AUTH-003).** No challenge/verification step;
-   `mfa` claim merely mirrors a stored boolean and gates a single route.
+5. **✅ MFA is a real TOTP second factor (PLAT-AUTH-003).** Login issues an
+   `mfa:false` token; stepping up to `mfa:true` requires a valid RFC 6238
+   authenticator code via `POST /auth/mfa/verify` (enrol via `/auth/mfa/enroll`).
+   The `@Mfa()` guard gates sensitive routes on the stepped-up claim.
 6. **🟡 Dev JWT fallback secret in source (NFR-SEC-003).**
    `dev-insecure-secret-change-me` ships in `token.service.ts` (prod fails closed).
 7. **🟡 Delegation-of-Authority table never read (PLAT-AUTH-005).**
@@ -295,13 +297,13 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | PAY-API-007 | Should | Partial | customer.service.ts:160-181 | stores wallet_id; no POST /wallets to platform |
 | PAY-API-008 | Must | Partial | payments.service.ts:35-42 | **HMAC computed but never enforced**; api_log never written |
 
-### Module Z — Shared Platform Services  (4 Met / 7 Partial / 2 Unmet; Musts 4/7)
+### Module Z — Shared Platform Services  (5 Met / 6 Partial / 2 Unmet; Musts 5/7)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
 | PLAT-AUTH-001 | Must | Met | roles.guard.ts:45-52; roles.ts:7-21 | 12 roles + global RBAC guard |
 | PLAT-AUTH-002 | Must | Met | roles.guard.ts:45-52; roles.ts:33-70 | per-route grants + cross-module read groups |
-| PLAT-AUTH-003 | Must | Partial | ledger.controller.ts:48; auth.service.ts:74-80 | @Mfa on one route; mfa is passive flag, no challenge |
+| PLAT-AUTH-003 | Must | Met | auth.service.ts:115-185; auth.controller.ts:26-39; totp.util.ts | TOTP 2FA (RFC 6238): enroll→verify steps up mfa:true; @Mfa() gates on claim |
 | PLAT-AUTH-004 | Should | Unmet | — | no SSO/SAML/OIDC; local scrypt+HS256 only |
 | PLAT-AUTH-005 | Must | Partial | schema.sql:166-175; ledger.service.ts:219-257 | DoA table exists but never read; dual-auth hard-coded |
 | PLAT-AUDIT-001 | Must | Met | schema.sql:204-232; prisma.service.ts:24-39 | capture_audit trigger + actor context |
@@ -339,6 +341,8 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 3. ✅ Module H outbound bill push to the Payments Platform (PAY-API-001/002/004).
 4. ✅ Module A accounting layer (FIN-ACC-001..009): real-time double-entry posting,
    reversal, trial balance, P&L per asset class, balance sheet, period close, CSV export.
+5. ✅ MFA challenge (PLAT-AUTH-003): real TOTP second factor (RFC 6238) with
+   enroll/verify step-up, replacing the old passive `mfa` flag.
 
 **Next candidates:**
 1. **Customer portals (Module G)** — buyer/tenant self-service (0/10 Musts); the
@@ -347,5 +351,5 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
    postpaid half of Module D (prepaid vending already works).
 3. **Accounting tail** — cash flow statement (FIN-ACC-005) and budget-vs-actuals
    (FIN-ACC-010), the latter once Module E project budgets have application code.
-4. **MFA challenge (PLAT-AUTH-003)** and **DoA-rule-driven dual-auth (PLAT-AUTH-005)**
-   to harden the platform-services layer.
+4. **DoA-rule-driven dual-auth (PLAT-AUTH-005)** — read `core.authority_rule`
+   instead of the hard-coded dual-auth, to finish hardening platform services.

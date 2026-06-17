@@ -15,7 +15,8 @@ export interface JwtClaims {
   role: string;
   /** all role codes granted to the user (for RBAC). */
   roles: string[];
-  /** MFA capability flag, from core.app_user.mfa_enabled (PLAT-AUTH-005). */
+  /** MFA SATISFIED for this session — true only after a verified TOTP step-up,
+   *  never at first-factor login (PLAT-AUTH-003). */
   mfa: boolean;
   username?: string;
   /** issued-at / expiry (epoch seconds) — set by sign(). */
