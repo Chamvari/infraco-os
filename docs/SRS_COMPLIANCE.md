@@ -26,13 +26,13 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | **F — Document Layer**        | 0  | 2  | 3  | 5  | 0 / 5   |
 | **G — Portals**               | 0  | 3  | 13 | 16 | 0 / 10  |
 | **H — Payments Integration**  | 1  | 5  | 2  | 8  | 1 / 6   |
-| **Z — Platform Services**     | 6  | 5  | 2  | 13 | 5 / 7   |
+| **Z — Platform Services**     | 7  | 4  | 2  | 13 | 6 / 7   |
 | **NFRs**                      | 0  | 7  | 4  | 11 | 0 / 7   |
-| **TOTAL**                     | **61** | **68** | **70** | **202** | **50 / 133** |
+| **TOTAL**                     | **62** | **67** | **73** | **202** | **51 / 133** |
 
-- **Fully met:** 61 / 202 ≈ **30%**
+- **Fully met:** 62 / 202 ≈ **31%**
 - **Met or partial:** 129 / 202 ≈ **64%**
-- **Must-have requirements fully met:** 50 / 133 ≈ **38%**
+- **Must-have requirements fully met:** 51 / 133 ≈ **38%**
 
 ### Maturity by SRS phase (§3.3)
 | Phase | Modules | State |
@@ -65,8 +65,11 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
    The `@Mfa()` guard gates sensitive routes on the stepped-up claim.
 6. **🟡 Dev JWT fallback secret in source (NFR-SEC-003).**
    `dev-insecure-secret-change-me` ships in `token.service.ts` (prod fails closed).
-7. **🟡 Delegation-of-Authority table never read (PLAT-AUTH-005).**
-   `core.authority_rule` exists; dual-auth is hard-coded, not rule-driven.
+7. **✅ Delegation-of-Authority now rule-driven (PLAT-AUTH-005).**
+   `core.authority_rule` drives an initiate→approve/reject→execute workflow
+   (`ApprovalService`); high-value ledger adjustments route through it and a
+   distinct second signatory is enforced. The old hard-coded ledger dual-auth
+   was consolidated into this single mechanism.
 
 ---
 
@@ -297,7 +300,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | PAY-API-007 | Should | Partial | customer.service.ts:160-181 | stores wallet_id; no POST /wallets to platform |
 | PAY-API-008 | Must | Partial | payments.service.ts:35-42 | **HMAC computed but never enforced**; api_log never written |
 
-### Module Z — Shared Platform Services  (6 Met / 5 Partial / 2 Unmet; Musts 5/7)
+### Module Z — Shared Platform Services  (7 Met / 4 Partial / 2 Unmet; Musts 6/7)
 
 | ID | Priority | Status | Evidence | Note |
 |---|---|---|---|---|
@@ -305,7 +308,7 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | PLAT-AUTH-002 | Must | Met | roles.guard.ts:45-52; roles.ts:33-70 | per-route grants + cross-module read groups |
 | PLAT-AUTH-003 | Must | Met | auth.service.ts:115-185; auth.controller.ts:26-39; totp.util.ts | TOTP 2FA (RFC 6238): enroll→verify steps up mfa:true; @Mfa() gates on claim |
 | PLAT-AUTH-004 | Should | Unmet | — | no SSO/SAML/OIDC; local scrypt+HS256 only |
-| PLAT-AUTH-005 | Must | Partial | schema.sql:166-175; ledger.service.ts:219-257 | DoA table exists but never read; dual-auth hard-coded |
+| PLAT-AUTH-005 | Must | Met | approval.service.ts; approval.controller.ts; db/migrations/004_doa_dual_auth.sql; ledger.service.ts (postManualAdjustment) | DoA matrix (core.authority_rule) now drives an initiate→approve/reject→execute workflow; distinct second signatory enforced; ledger adjustments route through it |
 | PLAT-AUDIT-001 | Must | Met | schema.sql:204-232; prisma.service.ts:24-39 | capture_audit trigger + actor context |
 | PLAT-AUDIT-002 | Must | Met | schema.sql:178-200 | append-only/immutable (UPDATE/DELETE blocked) |
 | PLAT-AUDIT-003 | Must | Partial | roles.ts:49,53 | audit roles exist; no audit-log search/export endpoint |
@@ -343,6 +346,10 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
    reversal, trial balance, P&L per asset class, balance sheet, period close, CSV export.
 5. ✅ MFA challenge (PLAT-AUTH-003): real TOTP second factor (RFC 6238) with
    enroll/verify step-up, replacing the old passive `mfa` flag.
+6. ✅ DoA-rule-driven dual-auth (PLAT-AUTH-005): `core.authority_rule`-driven
+   initiate→approve/reject→execute workflow; ledger adjustments consolidated onto it.
+7. ✅ Notifications delivery (PLAT-NOTIF-002): SMS/USSD via Africa's Talking with
+   async queue + delivery-status logging to `core.notification`.
 
 **Next candidates:**
 1. **Customer portals (Module G)** — buyer/tenant self-service (0/10 Musts); the
@@ -351,5 +358,5 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
    postpaid half of Module D (prepaid vending already works).
 3. **Accounting tail** — cash flow statement (FIN-ACC-005) and budget-vs-actuals
    (FIN-ACC-010), the latter once Module E project budgets have application code.
-4. **DoA-rule-driven dual-auth (PLAT-AUTH-005)** — read `core.authority_rule`
-   instead of the hard-coded dual-auth, to finish hardening platform services.
+4. **Notifications event-wiring + email channel (PLAT-NOTIF-001)** — trigger the
+   templates from payments/arrears/onboarding events and add an email channel.
