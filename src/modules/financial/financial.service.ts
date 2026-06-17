@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { PaymentsService } from '../payments/payments.service';
-import { LedgerService } from './ledger.service';
+import { LedgerService, TxClient } from './ledger.service';
 import { CURRENCY_CODES, CurrencyCode } from '../../common/enums';
 import {
   computeInstalmentAmounts,
@@ -60,18 +60,31 @@ export class FinancialService {
     structure: InstalmentStructure;
     currency: CurrencyCode;
   }> {
+    // Validate (and compute the maths) BEFORE opening a transaction, so invalid
+    // input is rejected without ever entering withActor.
+    this.computeSchedule(params);
+    return this.prisma.withActor(params.actorId, params.actorRole, (tx) =>
+      this.generateInstalmentScheduleTx(tx as TxClient, params),
+    );
+  }
+
+  /**
+   * Pure validation + instalment maths (no DB). Throws BadRequestException on
+   * invalid input. Shared by the public method (early, pre-transaction) and the
+   * Tx variant (defence in depth).
+   */
+  private computeSchedule(params: GenerateScheduleParams): {
+    amounts: number[];
+    monthsPerStep: number;
+  } {
     const {
-      accountId,
       totalPrice,
       deposit,
       numInstalments,
       frequency = 'monthly',
       structure = 'equal',
       balloonAmount,
-      startDate,
       currency = 'USD',
-      actorId,
-      actorRole,
     } = params;
 
     if (!CURRENCY_CODES.includes(currency)) {
@@ -85,7 +98,6 @@ export class FinancialService {
     }
 
     const financed = Math.max(Math.round((totalPrice - deposit) * 100) / 100, 0);
-
     let amounts: number[];
     try {
       amounts = computeInstalmentAmounts(financed, numInstalments, structure, balloonAmount);
@@ -93,10 +105,39 @@ export class FinancialService {
       if (e instanceof InstalmentError) throw new BadRequestException(e.message);
       throw e;
     }
+    return { amounts, monthsPerStep: frequency === 'quarterly' ? 3 : 1 };
+  }
 
-    const monthsPerStep = frequency === 'quarterly' ? 3 : 1;
+  /**
+   * Transaction-aware variant: generates the plan + draft invoices on an
+   * existing transaction so callers (e.g. SalesService converting a reservation
+   * to a sale) can compose schedule generation atomically with their own writes.
+   * The public generateInstalmentSchedule() wraps this in withActor().
+   */
+  async generateInstalmentScheduleTx(
+    tx: TxClient,
+    params: GenerateScheduleParams,
+  ): Promise<{
+    invoiceIds: string[];
+    amounts: number[];
+    count: number;
+    structure: InstalmentStructure;
+    currency: CurrencyCode;
+  }> {
+    const {
+      accountId,
+      totalPrice,
+      deposit,
+      numInstalments,
+      frequency = 'monthly',
+      structure = 'equal',
+      startDate,
+      currency = 'USD',
+    } = params;
 
-    return this.prisma.withActor(actorId, actorRole, async (tx) => {
+    const { amounts, monthsPerStep } = this.computeSchedule(params);
+
+    {
       await tx.$executeRawUnsafe(
         `INSERT INTO fin.instalment_plan
            (account_id, total_price, deposit, num_instalments, frequency, structure, start_date, currency)
@@ -137,7 +178,7 @@ export class FinancialService {
       }
 
       return { invoiceIds, amounts, count: numInstalments, structure, currency };
-    });
+    }
   }
 
   /**
