@@ -1,0 +1,152 @@
+# ─────────────────────────────────────────────────────────────
+# infraco-os  –  Production Docker Compose  (Scaling Edition)
+#
+# Services:
+#   db          PostgreSQL 16 + PostGIS  (the schema needs the postgis,
+#               btree_gist, pg_trgm and pgcrypto extensions)
+#   pgbouncer   Connection pooler (transaction mode) between API and Postgres
+#   redis       Cache + BullMQ job queues (SMS/USSD delivery)
+#   api         NestJS API  (scale with --scale api=N)
+#   web         Vite/React SPA served by Nginx (HTTPS + reverse proxy)
+#
+# Run from the repo root (paths below are relative to THIS file in docker/):
+#   docker compose -f docker/docker-compose.prod.yml --env-file docker/.env up -d --build
+# or use the wrapper:  ./docker/install.sh   (see docker/README.md)
+# ─────────────────────────────────────────────────────────────
+
+name: infraco-os
+
+services:
+
+  # ── PostgreSQL + PostGIS ────────────────────────────────────
+  db:
+    image: postgis/postgis:16-3.4          # NOT plain postgres — Prisma datasource needs PostGIS
+    container_name: infraco_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME}
+      POSTGRES_USER:     ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      # First-boot only (empty data volume): load the full schema dump.
+      # The dump creates the core/fin/sales schemas + required extensions.
+      - ../db/infraco_os_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [backend]
+
+  # ── PgBouncer (connection pooler) ───────────────────────────
+  # NOTE: the image env-var contract, listen port and healthcheck below are
+  # UNVERIFIED in this pass (no live container test). Confirm against the
+  # edoburu/pgbouncer docs before deploy — see docker/README.md "PgBouncer".
+  pgbouncer:
+    image: edoburu/pgbouncer:1.22.1
+    container_name: infraco_pgbouncer
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST:              db
+      DB_PORT:              5432
+      DB_USER:              ${DB_USER}
+      DB_PASSWORD:          ${DB_PASSWORD}
+      DB_NAME:              ${DB_NAME}
+      AUTH_TYPE:            scram-sha-256     # Postgres 16 default password_encryption
+      POOL_MODE:            transaction       # required for Prisma + ?pgbouncer=true
+      MAX_CLIENT_CONN:      1000
+      DEFAULT_POOL_SIZE:    25
+      MIN_POOL_SIZE:        5
+      RESERVE_POOL_SIZE:    5
+      RESERVE_POOL_TIMEOUT: 3
+      SERVER_IDLE_TIMEOUT:  600
+      LISTEN_PORT:          5432              # edoburu listens on 5432 (not pgbouncer's usual 6432)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${DB_USER} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [backend]
+
+  # ── Redis ───────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: infraco_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [backend]
+
+  # ── NestJS API ──────────────────────────────────────────────
+  # Scale with: docker compose -f docker/docker-compose.prod.yml up -d --scale api=3
+  api:
+    build:
+      context: ..                       # repo root — the API lives at the root, not in api/
+      dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      pgbouncer:
+        condition: service_started      # started, not healthy — pgbouncer healthcheck is unverified
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT:     3001                     # the app honours process.env.PORT (defaults to 3000)
+      # API talks to PgBouncer, not Postgres directly. ?pgbouncer=true tells
+      # Prisma to disable prepared statements (required for transaction pooling).
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME}?pgbouncer=true
+      # Auth — names match src/modules/auth/token.service.ts (TTL is in SECONDS)
+      AUTH_JWT_SECRET:       ${AUTH_JWT_SECRET}
+      AUTH_JWT_TTL_SECONDS:  ${AUTH_JWT_TTL_SECONDS:-86400}
+      REDIS_URL:             redis://:${REDIS_PASSWORD}@redis:6379
+      # Africa's Talking (SMS + USSD)
+      AT_API_KEY:   ${AT_API_KEY}
+      AT_USERNAME:  ${AT_USERNAME}
+      AT_SENDER_ID: ${AT_SENDER_ID:-InfraCo}
+      AT_USSD_CODE: ${AT_USSD_CODE:-*384*57#}
+      # Payments (EOS switch)
+      PAYMENTS_API_BASE_URL:         ${PAYMENTS_API_BASE_URL}
+      PAYMENTS_API_KEY:              ${PAYMENTS_API_KEY}
+      PAYMENTS_CALLBACK_HMAC_SECRET: ${PAYMENTS_CALLBACK_HMAC_SECRET}
+    networks: [backend, frontend]
+
+  # ── Nginx (HTTPS + SPA + reverse proxy / load balance) ──────
+  web:
+    build:
+      context: ..                       # repo root — the SPA lives in web/
+      dockerfile: docker/web.Dockerfile
+    container_name: infraco_web
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro          # docker/ssl/{infraco.crt,infraco.key} (install.sh seeds self-signed)
+    networks: [frontend]
+
+volumes:
+  pg_data:
+  redis_data:
+
+networks:
+  backend:
+  frontend:

@@ -5,3 +5,11 @@ dist/
 coverage/
 .npm-cache/
 .claude/settings.local.json
+
+# delivery/build archives
+infraco-os-scaling-layer.tar.gz
+*.tar.gz
+
+# production secrets & TLS material (docker/.env.production.example is committed)
+docker/.env
+docker/ssl/

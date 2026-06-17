@@ -1,0 +1,18 @@
+# Build context = repo root for both docker/api.Dockerfile and docker/web.Dockerfile.
+# Keep host node_modules / build output / secrets out of the build context.
+**/node_modules
+dist
+web/dist
+.git
+.gitignore
+.npm-cache
+coverage
+*.tar.gz
+infraco-scaling
+.env
+.env.*
+docker/.env
+docker/ssl
+**/*.spec.ts
+test
+docs
