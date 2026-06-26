@@ -67,8 +67,7 @@ export function LeasingDashboard() {
 
   return (
     <section>
-      <div className="section-head">
-        <h1>Leasing — rent roll</h1>
+      <div className="section-head" style={{ justifyContent: 'flex-end' }}>
         <button className="btn ghost" onClick={() => void load()} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>

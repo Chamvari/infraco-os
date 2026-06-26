@@ -42,8 +42,7 @@ export function PlotInventory({ onReserve }: { onReserve?: (plotId: string) => v
 
   return (
     <section>
-      <div className="section-head">
-        <h1>Plot inventory</h1>
+      <div className="section-head" style={{ justifyContent: 'flex-end' }}>
         <button className="btn ghost" onClick={() => void load()} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>

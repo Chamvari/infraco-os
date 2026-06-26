@@ -62,10 +62,6 @@ export function ReservationFlow({
 
   return (
     <section>
-      <div className="section-head">
-        <h1>Reserve a plot</h1>
-      </div>
-
       <div className="card">
         <form className="form" onSubmit={onSubmit}>
           <label>
