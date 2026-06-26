@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { LoginPage } from './components/LoginPage';
+import { FinanceDashboard } from './components/FinanceDashboard';
+import { PlotInventory } from './components/PlotInventory';
+import { MapView } from './components/MapView';
+import { ReservationFlow } from './components/ReservationFlow';
+import { LeasingDashboard } from './components/LeasingDashboard';
 import { useAuth } from './auth';
+import { can } from './roles';
 import {
   api,
   type CollectionsSummary,
@@ -42,6 +48,10 @@ const NAV: NavSection[] = [
 
 const TITLES: Record<string, { title: string; subtitle: string }> = {
   dashboard: { title: 'Estate operations', subtitle: 'Kwekwe Estate · live' },
+  debtors: { title: 'Debtors', subtitle: 'Arrears ageing & top debtors' },
+  sitemap: { title: 'Site map', subtitle: 'Plot allocation & GIS' },
+  sales: { title: 'Sales', subtitle: 'Plot inventory' },
+  tenant: { title: 'Tenant portal', subtitle: 'Rent roll & leases' },
 };
 
 function initials(username?: string): string {
@@ -60,17 +70,53 @@ export function App() {
 function AdminApp() {
   const { user, logout } = useAuth();
   const [active, setActive] = useState('dashboard');
+  const [reservePlotId, setReservePlotId] = useState('');
+
+  const canReserve = can(user, 'sales');
+
+  // Reserving jumps to the Sales view with the chosen plot pre-filled.
+  function goReserve(plotId: string) {
+    setReservePlotId(plotId);
+    setActive('sales');
+  }
+  function navigate(id: string) {
+    setReservePlotId('');
+    setActive(id);
+  }
 
   const meta = TITLES[active] ?? {
     title: NAV.flatMap((s) => s.items).find((i) => i.id === active)?.label ?? '',
     subtitle: 'Coming soon',
   };
 
+  let content;
+  if (active === 'dashboard') content = <DashboardPreview />;
+  else if (active === 'debtors') content = <FinanceDashboard />;
+  else if (active === 'sitemap')
+    content = <MapView onReserve={canReserve ? goReserve : undefined} />;
+  else if (active === 'tenant') content = <LeasingDashboard />;
+  else if (active === 'sales')
+    content = reservePlotId ? (
+      <>
+        <button
+          className="btn ghost small"
+          style={{ marginBottom: 14 }}
+          onClick={() => setReservePlotId('')}
+        >
+          ← Back to plots
+        </button>
+        <ReservationFlow initialPlotId={reservePlotId} onReserved={() => {}} />
+      </>
+    ) : (
+      <PlotInventory onReserve={canReserve ? goReserve : undefined} />
+    );
+  else content = <Placeholder label={meta.title} />;
+
   return (
     <AppShell
       sections={NAV}
       activeId={active}
-      onNavigate={setActive}
+      onNavigate={navigate}
       title={meta.title}
       subtitle={meta.subtitle}
       month="Jun 2026"
@@ -78,7 +124,7 @@ function AdminApp() {
       roleLabel={user?.roles?.[0] ?? 'Admin'}
       onSignOut={logout}
     >
-      {active === 'dashboard' ? <DashboardPreview /> : <Placeholder label={meta.title} />}
+      {content}
     </AppShell>
   );
 }

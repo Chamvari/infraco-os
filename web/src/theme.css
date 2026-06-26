@@ -42,7 +42,7 @@
 .ic-shell .top h1 { font-size: 19px; font-weight: 700; letter-spacing: -.3px; margin: 0; }
 .ic-shell .top .sub { font-size: 12px; color: var(--mist); margin-top: 1px; }
 .ic-shell .top-right { display: flex; align-items: center; gap: 14px; }
-.ic-shell .pill { font-size: 12px; font-weight: 600; padding: 7px 13px; border-radius: 30px; background: var(--emerald-l); color: var(--emerald-d); }
+.ic-shell .top .pill { font-size: 12px; font-weight: 600; padding: 7px 13px; border-radius: 30px; background: var(--emerald-l); color: var(--emerald-d); }
 .ic-shell .avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--indigo), var(--sky)); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
 .ic-shell .wrap { padding: 26px 30px; }
 
@@ -90,6 +90,45 @@
 .ic-shell .bar-top .vl { font-weight: 700; }
 .ic-shell .bar { height: 9px; background: var(--bg); border-radius: 5px; overflow: hidden; }
 .ic-shell .bar i { display: block; height: 100%; border-radius: 5px; }
+
+/* ---------- legacy page compatibility ----------
+   Re-skins the original styles.css classes used by the ported pages
+   (FinanceDashboard, PlotInventory, MapView, ReservationFlow, LeasingDashboard)
+   to the demo tokens, so they sit consistently inside the shell without a
+   per-component rewrite. */
+.ic-shell .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.ic-shell .section-head h1 { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
+.ic-shell .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.ic-shell .card { background: var(--white); border: none; border-radius: var(--r); padding: 20px; box-shadow: var(--sh); margin-bottom: 16px; }
+.ic-shell .card h2 { font-size: 13px; font-weight: 700; color: var(--slate); text-transform: none; letter-spacing: 0; margin: 0 0 14px; }
+.ic-shell .kpi-label { font-size: 12px; color: var(--slate); font-weight: 600; }
+.ic-shell .kpi-value { font-size: 27px; font-weight: 800; letter-spacing: -.6px; margin-top: 6px; }
+.ic-shell .table { width: 100%; border-collapse: collapse; }
+.ic-shell .table th { font-size: 11px; color: var(--mist); text-transform: uppercase; letter-spacing: .5px; text-align: left; font-weight: 700; padding: 8px 12px; border: none; }
+.ic-shell .table td { padding: 11px 12px; font-size: 13px; border-top: 1px solid var(--line); border-bottom: none; }
+.ic-shell .table .num { text-align: right; }
+.ic-shell .table .empty { text-align: center; color: var(--mist); padding: 24px; }
+.ic-shell .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.ic-shell .hint { color: var(--mist); font-size: 13px; }
+.ic-shell .btn { background: linear-gradient(135deg, var(--emerald), var(--teal)); color: #fff; border: none; padding: 10px 16px; border-radius: var(--rs); font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit; box-shadow: 0 4px 14px rgba(0, 185, 107, .3); }
+.ic-shell .btn:hover { transform: translateY(-1px); }
+.ic-shell .btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; transform: none; }
+.ic-shell .btn.ghost { background: var(--bg); color: var(--slate); box-shadow: none; }
+.ic-shell .btn.ghost:hover { background: var(--line); }
+.ic-shell .btn.small { padding: 6px 12px; font-size: 12px; }
+.ic-shell .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.ic-shell .chip { border: 1px solid var(--line); background: var(--white); color: var(--slate); padding: 6px 13px; border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 12px; text-transform: capitalize; }
+.ic-shell .chip.active { background: linear-gradient(135deg, var(--emerald), var(--teal)); color: #fff; border-color: transparent; }
+.ic-shell .banner { margin-top: 14px; padding: 12px 14px; border-radius: var(--rs); font-weight: 600; font-size: 13px; }
+.ic-shell .banner.error { background: var(--coral-l); color: var(--coral-d); }
+.ic-shell .banner.success { background: var(--emerald-l); color: var(--emerald-d); }
+.ic-shell .banner-hint { font-weight: 400; font-size: 12px; margin-top: 4px; opacity: .85; }
+.ic-shell .form { display: flex; flex-direction: column; gap: 14px; max-width: 560px; }
+.ic-shell .form label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 13px; color: var(--slate); }
+.ic-shell .form input { border: 1px solid var(--line); border-radius: var(--rs); padding: 10px 12px; font: inherit; color: var(--ink); }
+.ic-shell .form input:focus { outline: none; border-color: var(--emerald); }
+.ic-shell .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.ic-shell .map-card { padding: 0; overflow: hidden; }
 
 /* ---------- responsive (collapse sidebar to icons) ---------- */
 @media (max-width: 920px) {
