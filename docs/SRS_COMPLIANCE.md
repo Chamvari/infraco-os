@@ -7,7 +7,16 @@ is **Met** only when real application code implements it — schema tables, DTOs
 comments, and TODO scaffolding alone do **not** count as Met (they score
 Partial at best). Status ∈ {Met, Partial, Unmet}.
 
-> **Aggregates are mechanically derived.** Every count in §1 (summary) and in each §3 module header is computed from the §3 per-requirement detail rows — the single source of truth. Do not hand-edit aggregate numbers; change the detail rows and re-derive. Last reconciled: 2026-06-17.
+> **Aggregates are mechanically derived.** Every count in §1 (summary) and in each §3 module header is computed from the §3 per-requirement detail rows — the single source of truth. Do not hand-edit aggregate numbers; change the detail rows and re-derive. Last reconciled: 2026-06-27.
+
+> **2026-06-27 session update.** Production deployment hardening (docker prod
+> stack + PgBouncer fixes live-verified; AWS CloudFormation IaC), database
+> consolidation (migrations folded into the canonical dump; dev demo users split
+> to `db/seed_dev_users.sql`; fixed the first-boot login **500** caused by a
+> missing `core.app_user.password_hash`), and a redesigned admin shell with a
+> live dashboard plus the five existing pages wired into it. Scorecard effect:
+> NFR-AVAIL-001 Unmet→Partial; evidence refreshed on NFR-MAINT-001 and
+> NFR-USAB-001. No new feature-module requirements were implemented this session.
 
 > **Headline:** the system implements the *core revenue/operations spine*
 > (onboarding, instalments, ledger, arrears, leasing, prepaid utility vending,
@@ -29,11 +38,11 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | **G — Portals**               | 0 | 3 | 13 | 16 | 0 / 11 |
 | **H — Payments Integration**  | 1 | 5 | 2 | 8 | 1 / 7 |
 | **Z — Platform Services**     | 7 | 4 | 2 | 13 | 6 / 8 |
-| **NFRs**                      | 0 | 7 | 4 | 11 | 0 / 8 |
-| **TOTAL**                     | **68** | **65** | **73** | **206** | **59 / 142** |
+| **NFRs**                      | 0 | 8 | 3 | 11 | 0 / 8 |
+| **TOTAL**                     | **68** | **66** | **72** | **206** | **59 / 142** |
 
 - **Fully met:** 68 / 206 ≈ **33%**
-- **Met or partial:** 133 / 206 ≈ **65%**
+- **Met or partial:** 134 / 206 ≈ **65%**
 - **Must-have requirements fully met:** 59 / 142 ≈ **42%**
 
 ### Maturity by SRS phase (§3.3)
@@ -328,12 +337,12 @@ Partial at best). Status ∈ {Met, Partial, Unmet}.
 | NFR-SEC-002 | Must | Unmet | — | no ZDPA features (consent/rights/breach/retention) |
 | NFR-SEC-003 | Must | Partial | token.service.ts:16-26 | env secrets, prod fails closed; dev fallback in source |
 | NFR-CONN-001 | Must | Partial | vend-idempotency test; schema:361,614 | server-side idempotency; no client offline/sync layer |
-| NFR-AVAIL-001 | Should | Unmet | — | deployment concern; no HA/health-check |
+| NFR-AVAIL-001 | Should | Partial | docker/docker-compose.prod.yml; aws-deploy/ | container health-checks (db + functional pgbouncer probe + api depends_on healthy) live-verified; restart:unless-stopped; documented EC2/CloudFormation deploy. Still single-instance — no HA/failover |
 | NFR-PERF-001 | Should | Partial | schema.sql:289-360 | hot-path indexes; no load test/caching |
 | NFR-SCALE-001 | Must | Partial | schema.sql indexes/gist/trgm | plausible but unbenchmarked; no audit partitioning |
 | NFR-BACKUP-001 | Must | Unmet | docker-compose.yml | no backup automation/RPO/RTO/residency |
-| NFR-MAINT-001 | Must | Partial | README.md; SRS comments | strong README; no ADR/OpenAPI/runbook |
-| NFR-USAB-001 | Should | Partial | web/index.html:5 | viewport meta; no responsive framework/mobile test |
+| NFR-MAINT-001 | Must | Partial | README.md; docker/README.md; aws-deploy/DEPLOY-README.md | strong README + deployment runbooks now present; still no ADR/OpenAPI |
+| NFR-USAB-001 | Should | Partial | web/src/theme.css (@media); web/index.html:5 | responsive app shell (sidebar collapses < 920px); no full mobile test |
 | NFR-AUDIT-001 | Must | Partial | schema.sql:178-200 | immutable audit log; no 7-yr retention/archival policy |
 
 ---
