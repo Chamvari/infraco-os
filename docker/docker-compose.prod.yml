@@ -42,11 +42,13 @@ services:
     networks: [backend]
 
   # ── PgBouncer (connection pooler) ───────────────────────────
-  # NOTE: the image env-var contract, listen port and healthcheck below are
-  # UNVERIFIED in this pass (no live container test). Confirm against the
-  # edoburu/pgbouncer docs before deploy — see docker/README.md "PgBouncer".
+  # Live-verified: image tag, env contract, listen port and healthcheck were
+  # tested end-to-end (db + pgbouncer up, a real SELECT routed through the pool).
+  # The healthcheck below runs an actual query THROUGH pgbouncer to Postgres, so
+  # "healthy" means the pool can reach the backend — not just that the listener
+  # answers (plain pg_isready reports OK even when the backend is unreachable).
   pgbouncer:
-    image: edoburu/pgbouncer:1.22.1
+    image: edoburu/pgbouncer:1.22.1-p0   # NB: the -p0 packaging suffix is required; bare 1.22.1 does not exist on Docker Hub
     container_name: infraco_pgbouncer
     restart: unless-stopped
     depends_on:
@@ -67,11 +69,15 @@ services:
       RESERVE_POOL_TIMEOUT: 3
       SERVER_IDLE_TIMEOUT:  600
       LISTEN_PORT:          5432              # edoburu listens on 5432 (not pgbouncer's usual 6432)
+    # Functional probe: routes a real query through the pooler to Postgres.
+    # Goes red if the backend is unreachable (unlike pg_isready, which only
+    # checks that pgbouncer's own listener answers the handshake).
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${DB_USER} || exit 1"]
+      test: ["CMD-SHELL", "PGPASSWORD=$$DB_PASSWORD psql -h 127.0.0.1 -p 5432 -U $$DB_USER -d $$DB_NAME -tAc 'select 1' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
     networks: [backend]
 
   # ── Redis ───────────────────────────────────────────────────
@@ -104,7 +110,7 @@ services:
     restart: unless-stopped
     depends_on:
       pgbouncer:
-        condition: service_started      # started, not healthy — pgbouncer healthcheck is unverified
+        condition: service_healthy      # pgbouncer healthcheck now verifies it can reach Postgres
       redis:
         condition: service_healthy
     environment:
