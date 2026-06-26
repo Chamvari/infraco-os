@@ -12,6 +12,13 @@ import { ROLE_GROUPS } from '../../common/roles';
 export class ReportingController {
   constructor(private readonly reporting: ReportingService) {}
 
+  // GET /api/finance/collections-summary
+  @Roles(...ROLE_GROUPS.read_finance)
+  @Get('collections-summary')
+  async collectionsSummary() {
+    return this.reporting.collectionsSummary();
+  }
+
   // GET /api/finance/arrears-ageing
   @Roles(...ROLE_GROUPS.read_finance)
   @Get('arrears-ageing')

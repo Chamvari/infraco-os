@@ -1,0 +1,103 @@
+/* =============================================================================
+   InfraCo OS — design tokens + app shell
+   Ported verbatim from docs/design-reference/infraco-os-demo-v4.html (:root).
+   All shell/component rules are scoped under .ic-shell so they never collide
+   with the legacy styles.css classes (.card/.pill/.brand/.app).
+   ============================================================================ */
+:root {
+  --emerald: #00B96B; --emerald-d: #00894F; --emerald-l: #E6FAF0;
+  --teal:    #0FB5BA; --teal-d:    #0A7E82; --teal-l:    #E0F8F9;
+  --indigo:  #3D4EE8; --indigo-d:  #2536B8; --indigo-l:  #ECEEFE;
+  --gold:    #FFB020; --gold-d:    #C77F00; --gold-l:    #FFF6E5;
+  --sky:     #1E9BF0; --sky-d:     #0B6FC2; --sky-l:     #E5F3FE;
+  --coral:   #FF5A5F; --coral-d:   #D83A3F; --coral-l:   #FFE8E9;
+  --ink:     #0E1726; --slate:     #5A6679; --mist:      #8A93A3;
+  --line:    #E8ECF2; --bg:        #F4F7FB; --white:     #fff;
+  --r: 14px; --rs: 10px; --rl: 20px;
+  --sh: 0 2px 8px rgba(14, 23, 38, .06); --shl: 0 8px 30px rgba(14, 23, 38, .10);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+}
+
+/* ---------- shell root ---------- */
+.ic-shell { display: flex; min-height: 100vh; font-family: var(--font); color: var(--ink); background: var(--bg); line-height: 1.5; }
+.ic-shell *, .ic-shell *::before, .ic-shell *::after { box-sizing: border-box; }
+
+/* ---------- sidebar ---------- */
+.ic-shell .nav { width: 240px; background: linear-gradient(180deg, #0E1726 0%, #16243B 100%); color: #fff; padding: 22px 16px; position: fixed; height: 100vh; overflow-y: auto; z-index: 50; }
+.ic-shell .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 20px; }
+.ic-shell .brand-logo { width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, var(--emerald), var(--teal)); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; color: #fff; box-shadow: 0 4px 14px rgba(0, 185, 107, .4); letter-spacing: -.5px; }
+.ic-shell .brand-name { font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
+.ic-shell .brand-sub { font-size: 11px; color: #7C8AA0; margin-top: 1px; }
+.ic-shell .nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #5C6A82; padding: 16px 10px 8px; font-weight: 700; }
+.ic-shell .nav-item { display: flex; align-items: center; gap: 11px; padding: 11px 12px; border-radius: 11px; cursor: pointer; font-size: 14px; font-weight: 500; color: #AEB9CC; transition: .15s; margin-bottom: 2px; width: 100%; border: none; background: none; text-align: left; font-family: inherit; }
+.ic-shell .nav-item:hover { background: rgba(255, 255, 255, .06); color: #fff; }
+.ic-shell .nav-item.active { background: linear-gradient(135deg, var(--emerald), var(--teal)); color: #fff; box-shadow: 0 4px 14px rgba(0, 185, 107, .35); }
+.ic-shell .nav-item .ic { font-size: 18px; width: 20px; text-align: center; }
+.ic-shell .nav-logout { margin-top: 18px; padding: 11px 12px; border-radius: 11px; cursor: pointer; font-size: 13px; color: #7C8AA0; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, .08); background: none; width: 100%; font-family: inherit; }
+.ic-shell .nav-logout:hover { color: #fff; background: rgba(255, 90, 95, .15); }
+
+/* ---------- main + top bar ---------- */
+.ic-shell .main { margin-left: 240px; flex: 1; min-height: 100vh; }
+.ic-shell .top { background: var(--white); border-bottom: 1px solid var(--line); padding: 16px 30px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 40; }
+.ic-shell .top h1 { font-size: 19px; font-weight: 700; letter-spacing: -.3px; margin: 0; }
+.ic-shell .top .sub { font-size: 12px; color: var(--mist); margin-top: 1px; }
+.ic-shell .top-right { display: flex; align-items: center; gap: 14px; }
+.ic-shell .pill { font-size: 12px; font-weight: 600; padding: 7px 13px; border-radius: 30px; background: var(--emerald-l); color: var(--emerald-d); }
+.ic-shell .avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--indigo), var(--sky)); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+.ic-shell .wrap { padding: 26px 30px; }
+
+/* ---------- KpiCard (stat) ---------- */
+.ic-shell .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.ic-shell .stat { background: var(--white); border-radius: var(--r); padding: 18px; box-shadow: var(--sh); position: relative; overflow: hidden; }
+.ic-shell .stat::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+.ic-shell .stat.e::before { background: var(--emerald); }
+.ic-shell .stat.t::before { background: var(--teal); }
+.ic-shell .stat.g::before { background: var(--gold); }
+.ic-shell .stat.s::before { background: var(--sky); }
+.ic-shell .stat.i::before { background: var(--indigo); }
+.ic-shell .stat.c::before { background: var(--coral); }
+.ic-shell .stat .lab { font-size: 12px; color: var(--slate); font-weight: 600; margin-bottom: 8px; }
+.ic-shell .stat .val { font-size: 27px; font-weight: 800; letter-spacing: -.6px; }
+.ic-shell .stat .chg { font-size: 12px; font-weight: 600; margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+.ic-shell .up { color: var(--emerald-d); }
+.ic-shell .down { color: var(--coral-d); }
+.ic-shell .neu { color: var(--mist); }
+
+/* ---------- layout helpers ---------- */
+.ic-shell .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+/* ---------- Panel ---------- */
+.ic-shell .panel { background: var(--white); border-radius: var(--r); padding: 20px; box-shadow: var(--sh); margin-bottom: 16px; }
+.ic-shell .panel h3 { font-size: 15px; font-weight: 700; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; }
+.ic-shell .panel h3 .ic { font-size: 18px; }
+.ic-shell .panel-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 13px; border-radius: var(--rs); margin-bottom: 9px; background: var(--bg); }
+.ic-shell .panel-row.warn { background: var(--gold-l); }
+.ic-shell .panel-row .t1 { font-size: 13px; font-weight: 600; }
+.ic-shell .panel-row .t2 { font-size: 11px; color: var(--slate); margin-top: 2px; }
+
+/* ---------- StatusTag ---------- */
+.ic-shell .tag { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; display: inline-block; }
+.ic-shell .tag.ok { background: var(--emerald-l); color: var(--emerald-d); }
+.ic-shell .tag.pend { background: var(--gold-l); color: var(--gold-d); }
+.ic-shell .tag.info { background: var(--sky-l); color: var(--sky-d); }
+.ic-shell .tag.red { background: var(--coral-l); color: var(--coral-d); }
+
+/* ---------- ProgressBar ---------- */
+.ic-shell .bar-row { margin-bottom: 14px; }
+.ic-shell .bar-row:last-child { margin-bottom: 0; }
+.ic-shell .bar-top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+.ic-shell .bar-top .nm { color: var(--slate); font-weight: 500; }
+.ic-shell .bar-top .vl { font-weight: 700; }
+.ic-shell .bar { height: 9px; background: var(--bg); border-radius: 5px; overflow: hidden; }
+.ic-shell .bar i { display: block; height: 100%; border-radius: 5px; }
+
+/* ---------- responsive (collapse sidebar to icons) ---------- */
+@media (max-width: 920px) {
+  .ic-shell .stats { grid-template-columns: repeat(2, 1fr); }
+  .ic-shell .grid2 { grid-template-columns: 1fr; }
+  .ic-shell .nav { width: 64px; }
+  .ic-shell .brand-name, .ic-shell .brand-sub, .ic-shell .nav-label,
+  .ic-shell .nav-item span:not(.ic), .ic-shell .nav-logout span:not(.ic) { display: none; }
+  .ic-shell .main { margin-left: 64px; }
+  .ic-shell .nav-item { justify-content: center; }
+}

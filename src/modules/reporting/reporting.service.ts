@@ -26,6 +26,39 @@ const BUCKET_LABEL: Record<ArrearsRisk, string> = {
 export class ReportingService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Collections summary: payment credits posted to the ledger this calendar
+   * month vs the previous month (adjustments excluded). Drives the dashboard
+   * "Collections (MTD)" KPI. Starts at zero on a fresh database.
+   */
+  async collectionsSummary(): Promise<{
+    currency: string;
+    mtd: number;
+    mtdCount: number;
+    prevMonth: number;
+    deltaPct: number | null;
+  }> {
+    const rows = await this.prisma.$queryRawUnsafe<
+      { mtd: string; mtd_count: string; prev: string }[]
+    >(
+      `SELECT
+          COALESCE(SUM(amount) FILTER (WHERE posted_at >= date_trunc('month', now())), 0)::text AS mtd,
+          COUNT(*)             FILTER (WHERE posted_at >= date_trunc('month', now()))::text      AS mtd_count,
+          COALESCE(SUM(amount) FILTER (
+            WHERE posted_at >= date_trunc('month', now()) - interval '1 month'
+              AND posted_at <  date_trunc('month', now())), 0)::text                             AS prev
+         FROM fin.ledger_entry
+        WHERE txn_type = 'credit'
+          AND (payment_method IS NULL OR payment_method <> 'adjustment')`,
+    );
+    const r = rows[0] ?? { mtd: '0', mtd_count: '0', prev: '0' };
+    const mtd = Number(r.mtd);
+    const prevMonth = Number(r.prev);
+    const deltaPct =
+      prevMonth > 0 ? Math.round(((mtd - prevMonth) / prevMonth) * 100) : null;
+    return { currency: 'USD', mtd, mtdCount: Number(r.mtd_count), prevMonth, deltaPct };
+  }
+
   /** Arrears ageing: latest snapshot per account, aggregated by risk bucket. */
   async arrearsAgeing(): Promise<
     Array<{ bucket: ArrearsRisk; label: string; accounts: number; total: number }>

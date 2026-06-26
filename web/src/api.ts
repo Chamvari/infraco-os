@@ -23,6 +23,27 @@ export interface ArrearsBucket {
   total: number;
 }
 
+export interface CollectionsSummary {
+  currency: string;
+  mtd: number;
+  mtdCount: number;
+  prevMonth: number;
+  deltaPct: number | null;
+}
+
+// DoA approval request (core.approval_request), as returned by GET /approvals.
+export interface ApprovalRecord {
+  approvalId: string;
+  actionCode: string;
+  entityRef: string | null;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'approved' | 'rejected' | 'executed';
+  threshold: number | null;
+  initiatedBy: string;
+  initiatedAt: string;
+}
+
 export interface Debtor {
   accountId: string;
   reference: string;
@@ -179,7 +200,13 @@ async function errorMessage(res: Response): Promise<string> {
 export const api = {
   login: (username: string, password: string) =>
     postJson<LoginResponse>('/auth/login', { username, password }),
+  collectionsSummary: () =>
+    getJson<CollectionsSummary>('/api/finance/collections-summary'),
   arrearsAgeing: () => getJson<ArrearsBucket[]>('/api/finance/arrears-ageing'),
+  approvals: (status?: string) =>
+    getJson<ApprovalRecord[]>(
+      status ? `/approvals?status=${encodeURIComponent(status)}` : '/approvals',
+    ),
   topDebtors: () => getJson<Debtor[]>('/api/finance/top-debtors'),
   listPlots: (status?: string) =>
     getJson<Plot[]>(
