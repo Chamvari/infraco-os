@@ -40,6 +40,26 @@ model AppUser {
   @@schema("core")
 }
 
+/// SMS audit log — every outbound SMS send attempt (NOTIF-SMS-003).
+model SmsLog {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phoneNumber  String
+  body         String
+  ref          String?
+  success      Boolean
+  atMessageId  String?
+  cost         String?
+  statusCode   String?
+  errorMessage String?
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([ref], map: "idx_sms_log_ref")
+  @@index([phoneNumber], map: "idx_sms_log_phone")
+  @@index([createdAt], map: "idx_sms_log_created_at")
+  @@map("sms_log")
+  @@schema("core")
+}
+
 /// ---- fin ----
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model Customer {

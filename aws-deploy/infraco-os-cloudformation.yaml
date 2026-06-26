@@ -1,0 +1,352 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  InfraCo OS — production EC2 deployment (Land Fortune Holdings / EOS Technology).
+  Stack: NestJS 10 API + PgBouncer + Redis + PostGIS 16-3.4 + React/Vite frontend via nginx.
+  All run as Docker containers on one EC2 instance via docker/docker-compose.prod.yml.
+  Schema auto-applies on first DB boot via db/infraco_os_schema.sql.
+  REBUILT against the real infraco-os-scaffold (NestJS, not Express; PostGIS, not plain Postgres).
+
+# ----------------------------------------------------------------------------
+#  PARAMETERS
+# ----------------------------------------------------------------------------
+Parameters:
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: >
+      Existing EC2 key pair for SSH access.
+      Create one in EC2 → Key Pairs before deploying.
+
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues: [t3.small, t3.medium, t3.large, t3.xlarge]
+    Description: >
+      EC2 size. t3.medium (2 vCPU / 4 GB) is a reasonable launch size for the pilot.
+      Upgrade to t3.large once you have real users.
+
+  SSHLocation:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: >
+      CIDR allowed to reach SSH (port 22).
+      STRONGLY recommended: set to your admin IP as x.x.x.x/32, not 0.0.0.0/0.
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: Must be a valid CIDR range.
+
+  GitRepoUrl:
+    Type: String
+    Default: https://github.com/Chamvari/infraco-os.git
+    Description: >
+      HTTPS URL of the InfraCo OS Git repository.
+      The repo must contain: docker/docker-compose.prod.yml, docker/api.Dockerfile,
+      docker/web.Dockerfile, docker/nginx.conf, docker/.env.production.example,
+      and db/infraco_os_schema.sql.
+
+  DomainName:
+    Type: String
+    Default: portal.landfortune.co.zw
+    Description: >
+      The domain that will serve InfraCo OS. After stack creation, point this
+      domain's A record at the Elastic IP shown in Outputs, then run certbot.
+
+  RootVolumeSizeGB:
+    Type: Number
+    Default: 80
+    MinValue: 40
+    Description: >
+      Root EBS volume in GB (PostGIS data + Docker images + logs live here).
+      80 GB is comfortable for launch; grow to 200 GB+ as data accumulates.
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    Description: Ubuntu 24.04 LTS (resolved automatically for each AWS region via SSM).
+
+# ----------------------------------------------------------------------------
+#  RESOURCES
+# ----------------------------------------------------------------------------
+Resources:
+
+  # ---- VPC + networking ---------------------------------------------------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.20.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-vpc" }
+        - { Key: Project, Value: InfraCo-OS }
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-igw" }
+
+  GatewayAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.20.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-public-subnet" }
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-rt" }
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttach
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+  # ---- Security group: 22 (SSH, restricted) + 80 + 443 only --------------
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >
+        InfraCo OS — allows SSH (restricted), HTTP, HTTPS.
+        PostGIS port 5432 is deliberately NOT opened; DB stays on Docker network.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+          Description: SSH — restrict to admin IP
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP (redirects to HTTPS via nginx)
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-sg" }
+
+  # ---- Elastic IP (stable address for DNS A record) -----------------------
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-eip" }
+
+  EIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ElasticIP.AllocationId
+      InstanceId: !Ref AppInstance
+
+  # ---- IAM role (SSM access for Session Manager, expandable) --------------
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-ec2-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # Allows AWS Systems Manager Session Manager (shell without open SSH)
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-role" }
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  # ---- The EC2 instance ---------------------------------------------------
+  AppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref InstanceProfile
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds: [!Ref WebSecurityGroup]
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref RootVolumeSizeGB
+            VolumeType: gp3
+            Encrypted: true
+            # IMPORTANT: false = volume survives a stack delete (protects your DB data)
+            DeleteOnTermination: false
+      Tags:
+        - { Key: Name,    Value: !Sub "${AWS::StackName}-app" }
+        - { Key: Project, Value: InfraCo-OS }
+        - { Key: Stack,   Value: NestJS-PostGIS-React }
+
+      # -----------------------------------------------------------------------
+      #  USER DATA — runs ONCE on first boot to install and start the stack
+      # -----------------------------------------------------------------------
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          LOG=/var/log/infraco-bootstrap.log
+          exec > >(tee -a $LOG) 2>&1
+          echo "=== InfraCo OS bootstrap START $(date) ==="
+
+          # 1. System update
+          apt-get update -y
+          apt-get upgrade -y
+          apt-get install -y \
+            docker.io \
+            docker-compose-plugin \
+            git \
+            ufw \
+            fail2ban \
+            certbot \
+            awscli \
+            curl \
+            jq
+
+          # 2. Start Docker
+          systemctl enable --now docker
+          usermod -aG docker ubuntu
+
+          # 3. Host-level firewall (belt-and-braces alongside the AWS SG)
+          ufw allow OpenSSH
+          ufw allow 80/tcp
+          ufw allow 443/tcp
+          ufw --force enable
+
+          # 4. Clone the InfraCo OS repo
+          cd /opt
+          if [ -d infraco-os ]; then
+            cd infraco-os && git pull
+          else
+            git clone ${GitRepoUrl} infraco-os
+            cd infraco-os
+          fi
+
+          # 5. Generate docker/.env from the committed example, with strong
+          #    random secrets for the values the stack needs to boot.
+          #    (AT_* and PAYMENTS_* keys stay as placeholders — fill them in
+          #     manually before SMS/payments go live; see NextSteps.)
+          ENVF=docker/.env
+          if [ ! -f "$ENVF" ]; then
+            cp docker/.env.production.example "$ENVF"
+            DBPW=$(openssl rand -hex 24)
+            REDISPW=$(openssl rand -hex 24)
+            JWT=$(openssl rand -hex 32)
+            sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=$DBPW|"          "$ENVF"
+            sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$REDISPW|" "$ENVF"
+            sed -i "s|^AUTH_JWT_SECRET=.*|AUTH_JWT_SECRET=$JWT|"   "$ENVF"
+            echo "=== docker/.env created; DB/Redis/AUTH_JWT secrets generated. Add AT_* + PAYMENTS_* keys before go-live. ==="
+          fi
+
+          # 6. Seed a self-signed TLS cert so nginx's :443 vhost can start.
+          #    (Replace with a real Let's Encrypt cert once DNS resolves — see NextSteps.)
+          if [ ! -f docker/ssl/infraco.crt ]; then
+            mkdir -p docker/ssl
+            openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
+              -keyout docker/ssl/infraco.key -out docker/ssl/infraco.crt \
+              -subj "/CN=${DomainName}"
+          fi
+
+          # 7. Build and start the committed prod stack
+          #    (db + pgbouncer + redis + api + web). Schema applies automatically
+          #    on first PostGIS container boot from db/infraco_os_schema.sql.
+          docker compose -f docker/docker-compose.prod.yml --env-file docker/.env up -d --build
+
+          # 8. Wait for the edge (nginx) to respond on its self-signed cert.
+          #    The API is not published to the host; nginx terminates TLS and proxies it.
+          echo "Waiting for the web edge to be healthy..."
+          for i in $(seq 1 30); do
+            if curl -skf https://localhost/health > /dev/null 2>&1; then
+              echo "Edge is up."
+              break
+            fi
+            sleep 10
+          done
+
+          # 9. Done — real TLS must be issued manually after DNS propagates.
+          #    certbot --standalone needs port 80, which nginx holds, so stop web first.
+          echo ""
+          echo "=== BOOTSTRAP COMPLETE $(date) ==="
+          echo "=== NEXT (run from /opt/infraco-os): ==="
+          echo "  1. Point DNS A record for ${DomainName} at: $(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4)"
+          echo "  2. After DNS propagates, issue a real cert (frees port 80 for certbot):"
+          echo "     docker compose -f docker/docker-compose.prod.yml --env-file docker/.env stop web"
+          echo "     certbot certonly --standalone -d ${DomainName} --non-interactive --agree-tos -m admin@landfortune.co.zw"
+          echo "     cp /etc/letsencrypt/live/${DomainName}/fullchain.pem docker/ssl/infraco.crt"
+          echo "     cp /etc/letsencrypt/live/${DomainName}/privkey.pem  docker/ssl/infraco.key"
+          echo "     docker compose -f docker/docker-compose.prod.yml --env-file docker/.env up -d web"
+          echo "  3. Add AT_* (SMS/USSD) + PAYMENTS_* keys to docker/.env, then:"
+          echo "     docker compose -f docker/docker-compose.prod.yml --env-file docker/.env up -d"
+          echo "==="
+
+# ----------------------------------------------------------------------------
+#  OUTPUTS
+# ----------------------------------------------------------------------------
+Outputs:
+
+  ElasticIP:
+    Description: >
+      Public IP address — point your DNS A record for portal.landfortune.co.zw here.
+    Value: !Ref ElasticIP
+
+  InstanceId:
+    Description: EC2 Instance ID (for console/CLI management).
+    Value: !Ref AppInstance
+
+  SSHCommand:
+    Description: SSH command (replace with your key path).
+    Value: !Sub "ssh -i ~/.ssh/${KeyPairName}.pem ubuntu@${ElasticIP}"
+
+  SessionManagerCommand:
+    Description: Connect via SSM Session Manager (no open SSH port needed).
+    Value: !Sub "aws ssm start-session --target ${AppInstance} --region ${AWS::Region}"
+
+  BootstrapLog:
+    Description: On the server — check bootstrap progress here.
+    Value: "sudo tail -f /var/log/infraco-bootstrap.log"
+
+  NextSteps:
+    Description: What to do after the stack creates.
+    Value: !Sub >
+      1. Point DNS A record for ${DomainName} to Elastic IP above.
+      2. SSH in: ssh -i ~/.ssh/${KeyPairName}.pem ubuntu@${ElasticIP}
+      3. Check bootstrap: sudo tail -f /var/log/infraco-bootstrap.log
+      4. Add SMS/payment keys: sudo nano /opt/infraco-os/docker/.env
+      5. Issue real TLS (after DNS propagates): cd /opt/infraco-os && sudo docker compose -f docker/docker-compose.prod.yml --env-file docker/.env stop web && sudo certbot certonly --standalone -d ${DomainName} --non-interactive --agree-tos -m admin@landfortune.co.zw
+      6. Install cert + start web: sudo cp /etc/letsencrypt/live/${DomainName}/fullchain.pem docker/ssl/infraco.crt && sudo cp /etc/letsencrypt/live/${DomainName}/privkey.pem docker/ssl/infraco.key && sudo docker compose -f docker/docker-compose.prod.yml --env-file docker/.env up -d web
+      7. Verify https://${DomainName} loads.
