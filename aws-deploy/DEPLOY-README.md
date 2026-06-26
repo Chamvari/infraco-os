@@ -120,8 +120,41 @@ curl -I https://portal.landfortune.co.zw
 
 ---
 
+## Creating the production admin user
+
+**Production boots with ZERO login-able accounts** — the canonical schema dump
+(`db/infraco_os_schema.sql`) intentionally contains no users, only the 12 RBAC
+roles. **Never load `db/seed_dev_users.sql` in production** — those are dev
+fixtures sharing a publicly-known password (`demo1234`). Create your real admin
+with a strong, unique password as a deliberate one-time step:
+
+1. **Generate a password hash** on a trusted machine (the API uses Node `scrypt`,
+   format `scrypt$<salt>$<key>` — see `src/modules/auth/password.util.ts`).
+   Reads the password from a prompt so it never lands in your shell history:
+   ```bash
+   read -rs PW && node -e 'const{scryptSync,randomBytes}=require("crypto");const s=randomBytes(16);console.log("scrypt$"+s.toString("hex")+"$"+scryptSync(process.env.PW,s,32).toString("hex"))' && unset PW
+   ```
+
+2. **Insert the user + grant `sys_admin`** via a **direct** Postgres connection
+   (psql, bypassing PgBouncer — see the migrations note below). Replace the hash:
+   ```sql
+   INSERT INTO core.app_user (username, full_name, email, status, password_hash)
+   VALUES ('admin', 'Platform Admin', 'admin@your-domain', 'active', 'scrypt$...');
+
+   INSERT INTO core.user_role (user_id, role_id)
+   SELECT u.user_id, r.role_id
+     FROM core.app_user u, core.role r
+    WHERE u.username = 'admin' AND r.code = 'sys_admin';
+   ```
+
+3. **Enrol MFA immediately** after first login via `POST /auth/mfa/enroll` →
+   `POST /auth/mfa/verify` (the admin role gates `@Mfa()` sensitive actions).
+
+---
+
 ## After you're live — hardening checklist
 
+- [ ] Create the real admin user (above) — and confirm `db/seed_dev_users.sql` was **never** loaded in prod
 - [ ] Lock `SSHLocation` to your admin IP (`x.x.x.x/32`) or switch to SSM Session Manager
 - [ ] Set up nightly `pg_dump` to S3 **before real customers** — this is the critical one
 - [ ] Verify Africa's Talking sender ID registered with Econet/NetOne (3–5 business days)
@@ -134,10 +167,17 @@ curl -I https://portal.landfortune.co.zw
 
 ## Schema migrations (note)
 
-The schema loads once on first DB boot from `db/infraco_os_schema.sql`. If you
-later run `prisma migrate deploy` against prod, it must use a **direct** Postgres
-connection — migrations cannot run through PgBouncer transaction pooling. See the
-`DIRECT_DATABASE_URL` note in `docker/.env.production.example`.
+The schema loads once on first DB boot from `db/infraco_os_schema.sql`, which is
+the **single, complete source of truth** — the former `db/migrations/` have been
+folded into it (they now live in `db/migrations_archive/` for reference only; do
+not re-apply them). A fresh boot therefore has the full schema (including
+`core.app_user.password_hash`), so `POST /auth/login` works without any extra
+migration step.
+
+Any **future** `prisma migrate deploy` against prod must use a **direct**
+Postgres connection — migrations cannot run through PgBouncer transaction
+pooling. See the `DIRECT_DATABASE_URL` note in
+`docker/.env.production.example`.
 
 ---
 
