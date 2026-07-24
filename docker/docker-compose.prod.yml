@@ -132,6 +132,19 @@ services:
       PAYMENTS_API_BASE_URL:         ${PAYMENTS_API_BASE_URL}
       PAYMENTS_API_KEY:              ${PAYMENTS_API_KEY}
       PAYMENTS_CALLBACK_HMAC_SECRET: ${PAYMENTS_CALLBACK_HMAC_SECRET}
+      # SMS (EOS Gateway default; smspop fallback). Blank KEY/URL => stub mode (no send).
+      SMS_MODE:         ${SMS_MODE:-gateway}
+      SMS_GATEWAY_URL:  ${SMS_GATEWAY_URL:-}
+      SMS_GATEWAY_KEY:  ${SMS_GATEWAY_KEY:-}
+      SMSPOP_TOKEN:     ${SMSPOP_TOKEN:-}
+      SMSPOP_SENDER_ID: ${SMSPOP_SENDER_ID:-CPAY202}
+    # Liveness probe hits the app's own /api/health (node http; no curl in the slim image).
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     networks: [backend, frontend]
 
   # ── Nginx (HTTPS + SPA + reverse proxy / load balance) ──────
@@ -147,6 +160,13 @@ services:
       - "443:443"
     volumes:
       - ./ssl:/etc/nginx/ssl:ro          # docker/ssl/{infraco.crt,infraco.key} (install.sh seeds self-signed)
+    # Plain-HTTP liveness path served on :80 (busybox wget can't do TLS); see nginx.conf.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks: [frontend]
 
 volumes:

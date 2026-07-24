@@ -135,8 +135,12 @@
   .ic-shell .stats { grid-template-columns: repeat(2, 1fr); }
   .ic-shell .grid2 { grid-template-columns: 1fr; }
   .ic-shell .nav { width: 64px; }
-  .ic-shell .brand-name, .ic-shell .brand-sub, .ic-shell .nav-label,
+  .ic-shell .brand-name, .ic-shell .brand-sub, .ic-shell .brand-img, .ic-shell .nav-label,
   .ic-shell .nav-item span:not(.ic), .ic-shell .nav-logout span:not(.ic) { display: none; }
   .ic-shell .main { margin-left: 64px; }
   .ic-shell .nav-item { justify-content: center; }
 }
+
+/* ---------- Land Fortune Infrastructure brand logo (sidebar) ---------- */
+.ic-shell .brand { flex-direction: column; align-items: flex-start; gap: 8px; }
+.ic-shell .brand-img { height: 26px; width: auto; max-width: 100%; display: block; }

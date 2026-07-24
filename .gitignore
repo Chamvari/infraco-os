@@ -13,3 +13,6 @@ infraco-os-scaling-layer.tar.gz
 # production secrets & TLS material (docker/.env.production.example is committed)
 docker/.env
 docker/ssl/
+
+# local operational artifact — plaintext admin password (never commit)
+ADMIN_CREDENTIALS.txt

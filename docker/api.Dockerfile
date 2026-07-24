@@ -44,6 +44,9 @@ COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/clie
 COPY --from=builder /app/dist                        ./dist
 COPY prisma ./prisma
 
-USER node                    # drop privileges (node image ships an unprivileged 'node' user)
+# drop privileges (the node image ships an unprivileged 'node' user).
+# NB: Dockerfile only treats '#' as a comment at line start — an inline comment
+# after `USER node` becomes part of the username and breaks container start.
+USER node
 EXPOSE 3001
 CMD ["node", "dist/main.js"]

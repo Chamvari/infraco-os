@@ -18,6 +18,7 @@ import {
 } from '../../common/enums';
 import { MeterAdapterRegistry } from './meter-adapter';
 import { EasyMobileClient } from './easymobile.client';
+import { SmsService } from '../../sms/sms.service';
 import {
   CreateLteProductDto,
   CreateMeterDto,
@@ -78,6 +79,7 @@ export class UtilityService {
     private readonly prisma: PrismaService,
     private readonly adapters: MeterAdapterRegistry,
     private readonly easyMobile: EasyMobileClient,
+    private readonly sms: SmsService,
   ) {}
 
   // ==========================================================================
@@ -221,9 +223,52 @@ export class UtilityService {
 
   /** Direct (agent/admin) vend; opens its own transaction. */
   async vend(dto: VendDto): Promise<VendOutcome> {
-    return this.prisma.withActor(dto.actorId, dto.actorRole, (tx) =>
+    const outcome = await this.prisma.withActor(dto.actorId, dto.actorRole, (tx) =>
       this.vendCoreTx(tx, dto, { actorId: dto.actorId, actorRole: dto.actorRole }),
     );
+    // Deliver the prepaid token to the customer by SMS — fire-and-forget, run
+    // OFF the DB transaction so SMS latency/failure never affects the vend.
+    // Only for a freshly-issued token; idempotent replays are skipped.
+    if (outcome.status === 'issued' && outcome.tokenCode && !outcome.duplicate) {
+      void this.notifyVendBySms(outcome);
+    }
+    return outcome;
+  }
+
+  /**
+   * Reference SMS wiring (UTIL-TKN-004): text the token to the meter's customer.
+   * Resolves the phone from the vend row; never throws — SMS must not affect vend.
+   */
+  private async notifyVendBySms(outcome: VendOutcome): Promise<void> {
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<
+        { phone: string | null; serial: string }[]
+      >(
+        `SELECT c.phone AS phone, m.serial_no AS serial
+           FROM util.token_vend v
+           JOIN util.meter m        ON m.meter_id = v.meter_id
+           LEFT JOIN fin.customer c ON c.customer_id = v.customer_id
+          WHERE v.vend_id = $1::uuid`,
+        outcome.vendId,
+      );
+      const phone = rows?.[0]?.phone;
+      const serial = rows?.[0]?.serial ?? '';
+      if (!phone) return; // no phone on file — nothing to deliver
+      const units = outcome.units == null ? '' : ` Units: ${outcome.units}.`;
+      const res = await this.sms.send(
+        phone,
+        `InfraCo: your electricity token ${outcome.tokenCode} for meter ${serial}.${units}`,
+      );
+      if (!res.ok) {
+        this.logger.warn(
+          `vend ${outcome.vendId}: token SMS to ${phone} not sent: ${res.error}`,
+        );
+      }
+    } catch (e: any) {
+      this.logger.warn(
+        `vend ${outcome.vendId}: token SMS lookup/send error: ${e?.message}`,
+      );
+    }
   }
 
   /**

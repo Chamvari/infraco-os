@@ -14,8 +14,11 @@ import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { UtilityModule } from './modules/utility/utility.module';
 import { ApprovalModule } from './modules/approvals/approval.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { SmsModule } from './sms/sms.module';
+import { HealthController } from './health.controller';
 
 @Module({
+  controllers: [HealthController],
   imports: [
     // Redis-backed job queue (SMS delivery, future billing/utility events).
     // Connection is read from process.env directly (no @nestjs/config), matching
@@ -40,6 +43,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     UtilityModule,
     ApprovalModule,
     NotificationsModule,
+    SmsModule,
   ],
 })
 export class AppModule {}

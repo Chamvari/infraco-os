@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import lfiLogo from '../../assets/lfi-logo.png';
 
 export type NavItem = { id: string; icon: string; label: string };
 export type NavSection = { label: string; items: NavItem[] };
@@ -36,11 +37,12 @@ export function AppShell({
     <div className="ic-shell">
       <nav className="nav">
         <div className="brand">
-          <div className="brand-logo">IC</div>
-          <div>
-            <div className="brand-name">InfraCo OS</div>
-            <div className="brand-sub">{roleLabel}</div>
-          </div>
+          <img
+            className="brand-img"
+            src={lfiLogo}
+            alt="Land Fortune Infrastructure"
+          />
+          <div className="brand-sub">{roleLabel}</div>
         </div>
 
         {sections.map((section) => (

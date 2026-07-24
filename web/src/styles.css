@@ -419,3 +419,19 @@ code {
 .empty-role h1 {
   margin-bottom: 8px;
 }
+
+/* Login: LFI logo on a dark banner (the card surface is light) */
+.login-logo {
+  background: #2B2926;
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.login-logo img {
+  height: 34px;
+  width: auto;
+  max-width: 100%;
+  display: block;
+}

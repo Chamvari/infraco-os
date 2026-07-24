@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../auth';
+import lfiLogo from '../assets/lfi-logo.png';
 
 /**
  * Sign-in screen. Shown by App whenever there is no authenticated principal.
@@ -29,6 +30,9 @@ export function LoginPage() {
   return (
     <div className="login">
       <form className="login-card form" onSubmit={onSubmit}>
+        <div className="login-logo">
+          <img src={lfiLogo} alt="Land Fortune Infrastructure" />
+        </div>
         <div className="brand login-brand">
           InfraCo OS <span className="brand-sub">Admin</span>
         </div>
