@@ -134,7 +134,7 @@ services:
       SMSPOP_API_BASE_URL: ${SMSPOP_API_BASE_URL:-https://smspop.co.zw}
       SMSPOP_TOKEN:        ${SMSPOP_TOKEN:-}
       SMSPOP_SENDER_ID:    ${SMSPOP_SENDER_ID:-InfraCo}
-      SMSPOP_TLS_INSECURE: ${SMSPOP_TLS_INSECURE:-true}
+      SMSPOP_TLS_INSECURE: ${SMSPOP_TLS_INSECURE:-false}
       USSD_CODE:           ${USSD_CODE:-*384*57#}
     # Liveness probe hits the app's own /api/health (node http; no curl in the slim image).
     healthcheck:

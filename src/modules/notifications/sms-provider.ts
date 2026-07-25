@@ -42,8 +42,10 @@ export function normalizeMsisdn(p: string): string | null {
  *   SMSPOP_API_BASE_URL   default https://smspop.co.zw
  *   SMSPOP_TOKEN          bearer token (blank => stub/no-send; never throws)
  *   SMSPOP_SENDER_ID      registered sender id
- *   SMSPOP_TLS_INSECURE   'true' (default) accepts SMSPop's self-signed cert —
- *                         scoped to this request only, never global.
+ *   SMSPOP_TLS_INSECURE   defaults 'false' (verify cert). smspop.co.zw serves a
+ *                         valid Let's Encrypt cert, so verification stays ON in
+ *                         production (messages carry buyer PII). Set 'true' only
+ *                         as a temporary escape hatch; scoped per-request, never global.
  */
 @Injectable()
 export class SmsPopProvider implements SmsProvider {
@@ -57,7 +59,7 @@ export class SmsPopProvider implements SmsProvider {
     const token = process.env.SMSPOP_TOKEN || '';
     const sender = senderId || process.env.SMSPOP_SENDER_ID || 'InfraCo';
     const base = process.env.SMSPOP_API_BASE_URL || 'https://smspop.co.zw';
-    const insecure = (process.env.SMSPOP_TLS_INSECURE || 'true').toLowerCase() === 'true';
+    const insecure = (process.env.SMSPOP_TLS_INSECURE || 'false').toLowerCase() === 'true';
 
     if (!token) {
       this.log.warn(`[SMS STUB] SMSPop not configured (SMSPOP_TOKEN) — would send to ${phone}`);
@@ -86,7 +88,8 @@ export class SmsPopProvider implements SmsProvider {
         'Content-Length': Buffer.byteLength(payload),
       },
     };
-    // Self-signed cert on smspop.co.zw — scoped to this request only, never global.
+    // Cert verification ON by default (smspop.co.zw has a valid LE cert). The
+    // insecure escape hatch is scoped to this request only, never global.
     if (isHttps) options.rejectUnauthorized = !insecure;
 
     return new Promise<SmsSendResult>((resolve) => {
