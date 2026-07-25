@@ -19,6 +19,15 @@ export interface JwtClaims {
    *  never at first-factor login (PLAT-AUTH-003). */
   mfa: boolean;
   username?: string;
+  /** Forced first-login password change is pending — hard-blocks all routes
+   *  except change-password until cleared (PLAT-AUTH-001). */
+  mustChange?: boolean;
+  /** Role-mandated MFA enrolment is pending (sys_admin/finance_mgr) — hard-blocks
+   *  all routes except MFA enrol/verify (and change-password). */
+  mustEnrolMfa?: boolean;
+  /** The user's token_version at issue time. A server-side bump (on password
+   *  change / MFA reset) invalidates every previously-issued token. */
+  tokenVersion?: number;
   /** issued-at / expiry (epoch seconds) — set by sign(). */
   iat?: number;
   exp?: number;

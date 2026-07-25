@@ -16,6 +16,10 @@ export interface AuthPrincipal {
   /** MFA satisfied for this session (PLAT-AUTH-005 sensitive actions). */
   mfa: boolean;
   username?: string;
+  /** Forced first-login password change pending (set by JwtAuthGuard from DB). */
+  mustChange?: boolean;
+  /** Role-mandated MFA enrolment pending (set by JwtAuthGuard from DB). */
+  mustEnrolMfa?: boolean;
 }
 
 export interface RequestWithUser {

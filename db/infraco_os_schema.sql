@@ -863,8 +863,39 @@ CREATE TABLE core.app_user (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     password_hash text,
-    mfa_secret text
+    mfa_secret text,
+    must_change_password boolean DEFAULT false NOT NULL,
+    temp_password_expires_at timestamp with time zone,
+    token_version integer DEFAULT 0 NOT NULL
 );
+
+-- Append-only authentication audit log (PLAT-AUTH-004/005). See
+-- db/migrations_archive/005_auth_hardening.sql for the migration.
+CREATE TABLE core.auth_event (
+    event_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    occurred_at timestamp with time zone DEFAULT now() NOT NULL,
+    event_type text NOT NULL,
+    actor_user_id uuid,
+    username text,
+    ip text,
+    detail jsonb,
+    CONSTRAINT auth_event_pkey PRIMARY KEY (event_id)
+);
+
+CREATE INDEX ix_auth_event_type_time ON core.auth_event (event_type, occurred_at DESC);
+CREATE INDEX ix_auth_event_user_time ON core.auth_event (lower(username), occurred_at DESC);
+CREATE INDEX ix_auth_event_ip_time ON core.auth_event (ip, occurred_at DESC);
+
+CREATE FUNCTION core.auth_event_immutable() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'core.auth_event is append-only and cannot be %', TG_OP;
+END;
+$$;
+
+CREATE TRIGGER trg_auth_event_immutable
+    BEFORE UPDATE OR DELETE ON core.auth_event
+    FOR EACH ROW EXECUTE FUNCTION core.auth_event_immutable();
 
 
 --
