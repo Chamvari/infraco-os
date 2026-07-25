@@ -2,7 +2,7 @@ import { UtilityService } from './utility.service';
 import { PrismaService } from '../../prisma.service';
 import { MeterAdapterRegistry } from './meter-adapter';
 import { EasyMobileClient } from './easymobile.client';
-import { SmsService } from '../../sms/sms.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Unit tests for UtilityService (Module D, SRS §7).
@@ -42,12 +42,12 @@ describe('UtilityService', () => {
     adapterVend = jest.fn().mockResolvedValue({ tokenCode: '1111-2222-3333-4444-5555' });
     adapters = { resolve: jest.fn().mockReturnValue({ vend: adapterVend }) };
     easyMobile = { provision: jest.fn() };
-    const sms = { send: jest.fn().mockResolvedValue({ ok: true, id: 'stub' }) };
+    const notifications = { sendTokenVendSms: jest.fn().mockResolvedValue({ status: 'queued' }) };
     service = new UtilityService(
       prisma as unknown as PrismaService,
       adapters as unknown as MeterAdapterRegistry,
       easyMobile as unknown as EasyMobileClient,
-      sms as unknown as SmsService,
+      notifications as unknown as NotificationsService,
     );
   });
 

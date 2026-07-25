@@ -37,7 +37,7 @@ Put real TLS certs at `docker/ssl/infraco.crt` and `docker/ssl/infraco.key`
 
 The API uses an **empty global prefix**; controllers own their full paths, so
 Nginx forwards the request URI unchanged (no prefix rewriting). Proxied edges
-mirror `web/vite.config.ts` plus the Africa's Talking webhooks:
+mirror `web/vite.config.ts` plus the notification webhooks:
 
 | Edge path                       | Goes to | Why |
 |---------------------------------|---------|-----|

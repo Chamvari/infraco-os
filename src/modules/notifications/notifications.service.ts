@@ -2,28 +2,29 @@
  * NotificationsService — Module Z notifications (PLAT-NOTIF-001/002).
  *
  * Channels:
- *   - SMS  via Africa's Talking (AT) — works on ALL networks, ALL phones
- *   - USSD via Africa's Talking      — feature phones, zero data cost
+ *   - SMS  via the active SmsProvider (SMSPop) — see sms-provider.ts
+ *   - USSD handler retained (menu logic); its inbound webhook is provider-specific
+ *     and currently unwired (SMSPop is SMS-only) — see notifications.controller.ts.
  *
  * Design:
- *   - All sends are async by default — queued via BullMQ, never block the request
- *     thread. enqueue:false forces an immediate send (e.g. prepaid token delivery).
+ *   - All sends are async by default — queued via BullMQ (attempts:3, exp backoff),
+ *     never block the request thread. enqueue:false forces an immediate send.
  *   - Every send with a known recipient is persisted to core.notification with a
- *     delivery status (queued → sent / failed), updated by the queue processor and
- *     by the Africa's Talking delivery-report (DLR) webhook (PLAT-NOTIF-002).
- *   - Config is read from process.env directly (matching token.service / payments);
- *     missing AT credentials degrade to a no-send mode rather than throwing, so the
- *     app (and the test suite) boots without carrier credentials.
+ *     delivery status (queued → sent / failed), updated by the queue processor
+ *     (PLAT-NOTIF-002). Per-message carrier DLR from SMSPop is not yet available.
+ *   - The concrete carrier lives behind SmsProvider (env-selected); this service
+ *     never talks to a carrier SDK directly. Missing provider credentials degrade
+ *     to stub/no-send rather than throwing, so the app/tests boot without creds.
  *
  * SRS refs: PLAT-NOTIF-001 (multi-channel notifications), PLAT-NOTIF-002 (delivery
  *           status logging), UTIL-TKN-002 (token SMS), ONB welcome SMS.
  */
 
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import AfricasTalking from 'africastalking';
 import { PrismaService } from '../../prisma.service';
+import { SmsProviderRegistry } from './sms-provider';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -153,37 +154,16 @@ Enter your account number:`,
 // ── Service ───────────────────────────────────────────────────
 
 @Injectable()
-export class NotificationsService implements OnModuleInit {
+export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private sms?: ReturnType<typeof AfricasTalking>['SMS'];
-  private isSandbox = false;
-  private defaultSenderId = 'InfraCo';
-  private ussdCode = '*384*57#';
+  private readonly defaultSenderId = process.env.SMSPOP_SENDER_ID ?? 'InfraCo';
+  private readonly ussdCode = process.env.USSD_CODE ?? '*384*57#';
 
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue('notifications') private readonly queue: Queue,
+    private readonly providers: SmsProviderRegistry,
   ) {}
-
-  onModuleInit() {
-    const username = process.env.AT_USERNAME;
-    const apiKey = process.env.AT_API_KEY;
-    this.defaultSenderId = process.env.AT_SENDER_ID ?? 'InfraCo';
-    this.ussdCode = process.env.AT_USSD_CODE ?? '*384*57#';
-    this.isSandbox = username === 'sandbox';
-
-    if (!username || !apiKey) {
-      this.logger.warn(
-        "Africa's Talking credentials not set (AT_USERNAME/AT_API_KEY) — SMS delivery disabled; notifications are still recorded to core.notification.",
-      );
-      return;
-    }
-
-    this.sms = AfricasTalking({ username, apiKey }).SMS;
-    this.logger.log(
-      `Africa's Talking initialised [${this.isSandbox ? 'SANDBOX' : 'PRODUCTION'}] sender=${this.defaultSenderId}`,
-    );
-  }
 
   // ── Public API ─────────────────────────────────────────────
 
@@ -362,8 +342,10 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /**
-   * Apply an Africa's Talking delivery report (DLR webhook) to the matching
-   * notification, correlated by the provider message id stored in payload.
+   * Apply a carrier delivery report (DLR webhook) to the matching notification,
+   * correlated by the provider message id stored in payload. Provider-neutral;
+   * SMSPop does not yet post per-message DLRs, so this path is currently unwired
+   * for the active provider (retained for when SMSPop DLR is available).
    * Returns the number of rows updated.
    */
   async recordDeliveryReport(
@@ -403,7 +385,10 @@ export class NotificationsService implements OnModuleInit {
     return this.sendTemplate(
       'TOKEN_VEND',
       { token, units, meterNo, amount, currency },
-      { to, recipient, enqueue: false }, // tokens must arrive immediately
+      // Queued: retry + persisted delivery status. The worker runs in-process,
+      // so delivery is still effectively immediate — but never inline in the
+      // vend/payment transaction.
+      { to, recipient },
     );
   }
 
@@ -473,39 +458,28 @@ export class NotificationsService implements OnModuleInit {
   ): Promise<SmsResult> {
     const recipients = Array.isArray(to) ? to : [to];
     const sender = senderId ?? this.defaultSenderId;
+    const provider = this.providers.active();
 
-    if (!this.sms) {
+    // One send per recipient so each gets an independent accept/fail outcome.
+    const results = await Promise.all(
+      recipients.map((r) => provider.send(r, message, sender)),
+    );
+    const ok = results.every((r) => r.ok);
+    const messageId = results.find((r) => r.providerMessageId)?.providerMessageId ?? 'unknown';
+
+    if (ok) {
+      this.logger.log(`SMS sent via ${provider.name} to=${recipients.join(',')}`);
+    } else {
+      const err = results.find((r) => !r.ok)?.error;
       this.logger.warn(
-        `SMS client not initialised (no Africa's Talking credentials) — cannot deliver to ${recipients.join(',')}`,
+        `SMS send failed via ${provider.name} to=${recipients.join(',')}: ${err}`,
       );
-      return { messageId: 'disabled', status: 'failed', recipient: recipients.join(',') };
     }
 
-    try {
-      const result = await this.sms.send({
-        to: recipients,
-        message,
-        from: this.isSandbox ? undefined : sender,
-      });
-
-      const first = result.SMSMessageData?.Recipients?.[0];
-      this.logger.log(
-        `SMS sent to=${recipients.join(',')} status=${first?.status} cost=${first?.cost}`,
-      );
-
-      return {
-        messageId: first?.messageId ?? 'unknown',
-        status: first?.status === 'Success' ? 'sent' : 'failed',
-        recipient: recipients.join(','),
-        cost: first?.cost,
-      };
-    } catch (err) {
-      this.logger.error(`SMS send failed to=${recipients.join(',')}`, err as Error);
-      return {
-        messageId: 'error',
-        status: 'failed',
-        recipient: recipients.join(','),
-      };
-    }
+    return {
+      messageId,
+      status: ok ? 'sent' : 'failed',
+      recipient: recipients.join(','),
+    };
   }
 }

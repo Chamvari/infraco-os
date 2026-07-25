@@ -18,7 +18,7 @@ import {
 } from '../../common/enums';
 import { MeterAdapterRegistry } from './meter-adapter';
 import { EasyMobileClient } from './easymobile.client';
-import { SmsService } from '../../sms/sms.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   CreateLteProductDto,
   CreateMeterDto,
@@ -79,7 +79,7 @@ export class UtilityService {
     private readonly prisma: PrismaService,
     private readonly adapters: MeterAdapterRegistry,
     private readonly easyMobile: EasyMobileClient,
-    private readonly sms: SmsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ==========================================================================
@@ -236,15 +236,18 @@ export class UtilityService {
   }
 
   /**
-   * Reference SMS wiring (UTIL-TKN-004): text the token to the meter's customer.
-   * Resolves the phone from the vend row; never throws — SMS must not affect vend.
+   * SMS token delivery (UTIL-TKN-004): text the token to the meter's customer.
+   * Resolves the phone + customer from the vend row and hands off to the queued
+   * notifications path (BullMQ retry + core.notification persistence, via the
+   * active SMS provider). Runs AFTER the vend commits — never inline in the
+   * vend/payment transaction — and never throws: SMS must not affect the vend.
    */
   private async notifyVendBySms(outcome: VendOutcome): Promise<void> {
     try {
       const rows = await this.prisma.$queryRawUnsafe<
-        { phone: string | null; serial: string }[]
+        { phone: string | null; serial: string; customer_id: string | null }[]
       >(
-        `SELECT c.phone AS phone, m.serial_no AS serial
+        `SELECT c.phone AS phone, m.serial_no AS serial, v.customer_id::text AS customer_id
            FROM util.token_vend v
            JOIN util.meter m        ON m.meter_id = v.meter_id
            LEFT JOIN fin.customer c ON c.customer_id = v.customer_id
@@ -253,20 +256,21 @@ export class UtilityService {
       );
       const phone = rows?.[0]?.phone;
       const serial = rows?.[0]?.serial ?? '';
+      const customerId = rows?.[0]?.customer_id ?? undefined;
       if (!phone) return; // no phone on file — nothing to deliver
-      const units = outcome.units == null ? '' : ` Units: ${outcome.units}.`;
-      const res = await this.sms.send(
+
+      await this.notifications.sendTokenVendSms(
         phone,
-        `InfraCo: your electricity token ${outcome.tokenCode} for meter ${serial}.${units}`,
+        outcome.tokenCode ?? '',
+        outcome.units == null ? '' : String(outcome.units),
+        serial,
+        String(outcome.amountPaid),
+        'USD',
+        customerId ? { kind: 'customer', id: customerId } : undefined,
       );
-      if (!res.ok) {
-        this.logger.warn(
-          `vend ${outcome.vendId}: token SMS to ${phone} not sent: ${res.error}`,
-        );
-      }
     } catch (e: any) {
       this.logger.warn(
-        `vend ${outcome.vendId}: token SMS lookup/send error: ${e?.message}`,
+        `vend ${outcome.vendId}: token SMS enqueue error: ${e?.message}`,
       );
     }
   }

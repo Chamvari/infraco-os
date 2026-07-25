@@ -1,22 +1,20 @@
-// Mock the Africa's Talking SDK so the suite never builds a real client or hits
-// the network. `mockSend` is the SMS.send spy (the `mock` prefix is required for
-// jest.mock factory hoisting).
-const mockSend = jest.fn();
-jest.mock('africastalking', () => jest.fn(() => ({ SMS: { send: mockSend } })));
-
 import { NotificationsService } from './notifications.service';
 import { PrismaService } from '../../prisma.service';
+import { SmsProvider, SmsProviderRegistry } from './sms-provider';
 
 /**
  * Unit tests for NotificationsService (PLAT-NOTIF-001/002). Prisma, the BullMQ
- * queue, and the Africa's Talking client are all mocked, so nothing touches a
- * database, Redis, or the carrier. Verifies queueing, immediate send, delivery
- * status persistence to core.notification, and the USSD/DLR handlers.
+ * queue, and the SMS provider are all mocked, so nothing touches a database,
+ * Redis, or the carrier. Verifies queueing, immediate send through the active
+ * SmsProvider, delivery-status persistence to core.notification, and the
+ * USSD/DLR handlers.
  */
 describe('NotificationsService', () => {
   let service: NotificationsService;
   let prisma: { $queryRawUnsafe: jest.Mock; $executeRawUnsafe: jest.Mock };
   let queue: { add: jest.Mock };
+  let providerSend: jest.Mock;
+  let providers: { active: jest.Mock };
 
   const recipient = { kind: 'customer' as const, id: 'cust-1' };
 
@@ -27,29 +25,14 @@ describe('NotificationsService', () => {
       $executeRawUnsafe: jest.fn().mockResolvedValue(1),
     };
     queue = { add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
+    providerSend = jest.fn();
+    const provider: SmsProvider = { name: 'smspop', send: providerSend };
+    providers = { active: jest.fn().mockReturnValue(provider) };
     service = new NotificationsService(
       prisma as unknown as PrismaService,
       queue as unknown as never,
+      providers as unknown as SmsProviderRegistry,
     );
-  });
-
-  afterEach(() => {
-    delete process.env.AT_USERNAME;
-    delete process.env.AT_API_KEY;
-  });
-
-  // ── init ────────────────────────────────────────────────────
-
-  describe('onModuleInit', () => {
-    it('runs in degraded mode without AT credentials (no throw)', () => {
-      expect(() => service.onModuleInit()).not.toThrow();
-    });
-
-    it('initialises the AT client when credentials are present', () => {
-      process.env.AT_USERNAME = 'sandbox';
-      process.env.AT_API_KEY = 'key';
-      expect(() => service.onModuleInit()).not.toThrow();
-    });
   });
 
   // ── queueing + persistence ──────────────────────────────────
@@ -76,6 +59,8 @@ describe('NotificationsService', () => {
       expect(ins[3]).toBe('sms'); // channel
       expect(ins[4]).toBe('WELCOME'); // template_code
       expect(ins[6]).toBe('queued'); // status
+      // Queued path must NOT hit the carrier synchronously.
+      expect(providerSend).not.toHaveBeenCalled();
     });
 
     it('does not persist when no recipient uuid is available (recipient_id is NOT NULL)', async () => {
@@ -88,19 +73,11 @@ describe('NotificationsService', () => {
     });
   });
 
-  // ── immediate send ──────────────────────────────────────────
+  // ── immediate send (through the active provider) ────────────
 
   describe('sendSms (immediate)', () => {
-    beforeEach(() => {
-      process.env.AT_USERNAME = 'sandbox';
-      process.env.AT_API_KEY = 'key';
-      service.onModuleInit();
-    });
-
-    it('sends immediately and marks the notification sent', async () => {
-      mockSend.mockResolvedValue({
-        SMSMessageData: { Recipients: [{ status: 'Success', messageId: 'atid-1', cost: 'KES 0.8' }] },
-      });
+    it('sends via the provider and marks the notification sent', async () => {
+      providerSend.mockResolvedValue({ ok: true, providerMessageId: 'sp-1' });
 
       const res = await service.sendSms({
         to: '+263771234567',
@@ -110,17 +87,18 @@ describe('NotificationsService', () => {
       });
 
       expect(res.status).toBe('sent');
-      expect(mockSend).toHaveBeenCalled();
+      expect(res.messageId).toBe('sp-1');
+      expect(providerSend).toHaveBeenCalledWith('+263771234567', 'hi', expect.any(String));
       const upd = prisma.$executeRawUnsafe.mock.calls.find((c) =>
         String(c[0]).includes('UPDATE core.notification'),
       );
       expect(upd![1]).toBe('notif-1'); // notification_id
       expect(upd![2]).toBe('sent'); // status
-      expect(upd![3]).toBe('atid-1'); // providerMessageId
+      expect(upd![3]).toBe('sp-1'); // providerMessageId
     });
 
-    it('marks the notification failed when the carrier send throws', async () => {
-      mockSend.mockRejectedValue(new Error('AT unreachable'));
+    it('marks the notification failed when the provider reports not-ok', async () => {
+      providerSend.mockResolvedValue({ ok: false, error: 'smspop down' });
 
       const res = await service.sendSms({
         to: '+263771234567',
@@ -135,14 +113,6 @@ describe('NotificationsService', () => {
       );
       expect(upd![2]).toBe('failed');
     });
-  });
-
-  it('returns failed on immediate send when the AT client is not initialised', async () => {
-    service.onModuleInit(); // no credentials → degraded
-    const res = await service.sendSms({ to: '+263771234567', message: 'hi', enqueue: false });
-    expect(res.status).toBe('failed');
-    expect(res.messageId).toBe('disabled');
-    expect(mockSend).not.toHaveBeenCalled();
   });
 
   // ── templates / bulk ────────────────────────────────────────
@@ -196,16 +166,16 @@ describe('NotificationsService', () => {
 
   describe('recordDeliveryReport', () => {
     it('marks a notification sent on a Delivered DLR, matched by provider id', async () => {
-      const res = await service.recordDeliveryReport('atid-1', 'Delivered');
+      const res = await service.recordDeliveryReport('sp-1', 'Delivered');
       expect(res.updated).toBe(1);
       const upd = prisma.$executeRawUnsafe.mock.calls[0];
       expect(String(upd[0])).toContain("payload->>'providerMessageId'");
-      expect(upd[1]).toBe('atid-1');
+      expect(upd[1]).toBe('sp-1');
       expect(upd[2]).toBe('sent');
     });
 
     it('marks a notification failed on a failure DLR and records the reason', async () => {
-      await service.recordDeliveryReport('atid-2', 'Failed', 'UserInBlackList');
+      await service.recordDeliveryReport('sp-2', 'Failed', 'UserInBlackList');
       const upd = prisma.$executeRawUnsafe.mock.calls[0];
       expect(upd[2]).toBe('failed');
       expect(upd[4]).toBe('UserInBlackList');

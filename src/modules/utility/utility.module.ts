@@ -4,6 +4,7 @@ import { UtilityService } from './utility.service';
 import { MeterAdapterRegistry, MockMeterAdapter } from './meter-adapter';
 import { EasyMobileClient } from './easymobile.client';
 import { PrismaService } from '../../prisma.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 /**
  * UtilityModule — Module D (private-utility operator, SRS §7): prepaid vending,
@@ -11,6 +12,7 @@ import { PrismaService } from '../../prisma.service';
  * (Payments) can drive vends/LTE purchases from the payment callback.
  */
 @Module({
+  imports: [NotificationsModule],
   controllers: [UtilityController],
   providers: [
     UtilityService,

@@ -14,7 +14,6 @@ import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { UtilityModule } from './modules/utility/utility.module';
 import { ApprovalModule } from './modules/approvals/approval.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
-import { SmsModule } from './sms/sms.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -43,7 +42,6 @@ import { HealthController } from './health.controller';
     UtilityModule,
     ApprovalModule,
     NotificationsModule,
-    SmsModule,
   ],
 })
 export class AppModule {}

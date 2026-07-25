@@ -81,7 +81,7 @@ aws cloudformation wait stack-create-complete --stack-name infraco-os --region a
   — PostGIS starts and the schema auto-applies from `db/infraco_os_schema.sql`,
   PgBouncer + Redis come up, the API builds and starts, the SPA builds and nginx serves it
 
-> The `AT_*` (Africa's Talking SMS/USSD) and `PAYMENTS_*` keys are left as
+> The `SMSPOP_*` (SMS) and `PAYMENTS_*` keys are left as
 > placeholders — fill them into `docker/.env` and re-run `up -d` before those
 > features go live.
 
@@ -157,7 +157,7 @@ with a strong, unique password as a deliberate one-time step:
 - [ ] Create the real admin user (above) — and confirm `db/seed_dev_users.sql` was **never** loaded in prod
 - [ ] Lock `SSHLocation` to your admin IP (`x.x.x.x/32`) or switch to SSM Session Manager
 - [ ] Set up nightly `pg_dump` to S3 **before real customers** — this is the critical one
-- [ ] Verify Africa's Talking sender ID registered with Econet/NetOne (3–5 business days)
+- [ ] Verify SMSPop sender ID registered with Econet/NetOne (3–5 business days)
 - [ ] Replace payment placeholder keys with real Sqwarma/VGIL production credentials
 - [ ] Run a load test against production endpoints (the prior ASA portal failed under load — confirm this build holds up)
 - [ ] Set up CloudWatch alarms for CPU, disk, API error rate

@@ -1,12 +1,14 @@
 /**
  * NotificationsController
  *
- * Webhook endpoints that Africa's Talking calls server-to-server:
+ * Inbound carrier webhooks (server-to-server):
  *   POST /notifications/ussd    — USSD session callback
  *   POST /notifications/sms/dlr — SMS delivery report
  *
- * Both are PUBLIC (no JWT) — AT calls them server-to-server; in production they
- * are additionally protected by an Nginx IP allowlist (AT IP ranges).
+ * Both are PUBLIC (no JWT). NOTE: the active provider is SMSPop, which is
+ * SMS-only and does not drive USSD or post per-message DLRs — so these routes
+ * are retained but currently unwired. Keep them behind an Nginx IP allowlist
+ * once a provider that calls them is configured.
  */
 
 import { Controller, Post, Body, HttpCode, Logger } from '@nestjs/common';
@@ -20,8 +22,8 @@ export class NotificationsController {
   constructor(private readonly svc: NotificationsService) {}
 
   /**
-   * Africa's Talking USSD webhook.
-   * AT sends: sessionId, phoneNumber, networkCode, serviceCode, text.
+   * USSD session webhook (provider-agnostic shape).
+   * Provider sends: sessionId, phoneNumber, networkCode, serviceCode, text.
    * We respond with plain text: "CON ..." (continue) or "END ..." (terminate).
    */
   @Public()
@@ -37,8 +39,8 @@ export class NotificationsController {
   }
 
   /**
-   * Africa's Talking SMS delivery report webhook.
-   * AT sends: id (provider message id), status, phoneNumber, failureReason.
+   * SMS delivery-report webhook (provider-agnostic shape).
+   * Provider sends: id (provider message id), status, phoneNumber, failureReason.
    * Updates the matching core.notification row (PLAT-NOTIF-002).
    */
   @Public()

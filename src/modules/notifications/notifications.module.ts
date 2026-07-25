@@ -4,12 +4,13 @@ import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsProcessor } from './notifications.processor';
 import { PrismaService } from '../../prisma.service';
+import { SmsPopProvider, SmsProviderRegistry } from './sms-provider';
 
 /**
- * Module Z — notifications (PLAT-NOTIF-001/002). SMS/USSD via Africa's Talking,
- * with async delivery off the request thread (BullMQ) and delivery-status
- * logging to core.notification. The processor MUST be registered as a provider
- * or queued jobs would never be consumed.
+ * Module Z — notifications (PLAT-NOTIF-001/002). SMS via the active SmsProvider
+ * (SMSPop; see sms-provider.ts), with async delivery off the request thread
+ * (BullMQ) and delivery-status logging to core.notification. The processor MUST
+ * be registered as a provider or queued jobs would never be consumed.
  */
 @Module({
   imports: [
@@ -24,7 +25,13 @@ import { PrismaService } from '../../prisma.service';
       },
     }),
   ],
-  providers: [NotificationsService, NotificationsProcessor, PrismaService],
+  providers: [
+    NotificationsService,
+    NotificationsProcessor,
+    PrismaService,
+    SmsPopProvider,
+    SmsProviderRegistry,
+  ],
   controllers: [NotificationsController],
   exports: [NotificationsService], // re-exported so any module can inject it
 })

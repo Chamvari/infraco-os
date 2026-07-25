@@ -123,21 +123,19 @@ services:
       AUTH_JWT_SECRET:       ${AUTH_JWT_SECRET}
       AUTH_JWT_TTL_SECONDS:  ${AUTH_JWT_TTL_SECONDS:-86400}
       REDIS_URL:             redis://:${REDIS_PASSWORD}@redis:6379
-      # Africa's Talking (SMS + USSD)
-      AT_API_KEY:   ${AT_API_KEY}
-      AT_USERNAME:  ${AT_USERNAME}
-      AT_SENDER_ID: ${AT_SENDER_ID:-InfraCo}
-      AT_USSD_CODE: ${AT_USSD_CODE:-*384*57#}
       # Payments (EOS switch)
       PAYMENTS_API_BASE_URL:         ${PAYMENTS_API_BASE_URL}
       PAYMENTS_API_KEY:              ${PAYMENTS_API_KEY}
       PAYMENTS_CALLBACK_HMAC_SECRET: ${PAYMENTS_CALLBACK_HMAC_SECRET}
-      # SMS (EOS Gateway default; smspop fallback). Blank KEY/URL => stub mode (no send).
-      SMS_MODE:         ${SMS_MODE:-gateway}
-      SMS_GATEWAY_URL:  ${SMS_GATEWAY_URL:-}
-      SMS_GATEWAY_KEY:  ${SMS_GATEWAY_KEY:-}
-      SMSPOP_TOKEN:     ${SMSPOP_TOKEN:-}
-      SMSPOP_SENDER_ID: ${SMSPOP_SENDER_ID:-CPAY202}
+      # SMS — SMSPop only (src/modules/notifications/sms-provider.ts).
+      # Blank SMSPOP_TOKEN => stub mode (logs, no send). Sends are queued
+      # (BullMQ retry), never inline in a payment transaction.
+      SMS_PROVIDER:        ${SMS_PROVIDER:-smspop}
+      SMSPOP_API_BASE_URL: ${SMSPOP_API_BASE_URL:-https://smspop.co.zw}
+      SMSPOP_TOKEN:        ${SMSPOP_TOKEN:-}
+      SMSPOP_SENDER_ID:    ${SMSPOP_SENDER_ID:-InfraCo}
+      SMSPOP_TLS_INSECURE: ${SMSPOP_TLS_INSECURE:-true}
+      USSD_CODE:           ${USSD_CODE:-*384*57#}
     # Liveness probe hits the app's own /api/health (node http; no curl in the slim image).
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
