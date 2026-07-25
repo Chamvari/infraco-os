@@ -20,6 +20,10 @@ export interface SessionUser {
   username: string;
   roles: string[];
   mfaEnabled: boolean;
+  /** Forced first-login password change pending — gates the app to the reset screen. */
+  mustChangePassword?: boolean;
+  /** Role-mandated MFA enrolment pending — gates the app to the enrol screen. */
+  mustEnrolMfa?: boolean;
 }
 
 type Listener = () => void;

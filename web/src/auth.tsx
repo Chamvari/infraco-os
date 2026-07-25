@@ -23,6 +23,9 @@ import {
 interface AuthState {
   user: SessionUser | null;
   login: (username: string, password: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  enrollMfa: () => Promise<{ secret: string; otpauthUri: string }>;
+  verifyMfa: (code: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -35,9 +38,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // clears in api.ts) into React state.
   useEffect(() => onSessionChange(() => setUser(getUser())), []);
 
+  // Merge the top-level forced-flow flags onto the stored principal so the App
+  // gate (change-password / MFA-enrol) can read them off `user`.
+  function persist(res: {
+    accessToken: string;
+    user: SessionUser;
+    mustChangePassword: boolean;
+    mustEnrolMfa: boolean;
+  }): void {
+    setSession(res.accessToken, {
+      ...res.user,
+      mustChangePassword: res.mustChangePassword,
+      mustEnrolMfa: res.mustEnrolMfa,
+    });
+  }
+
   async function login(username: string, password: string): Promise<void> {
-    const { accessToken, user: principal } = await api.login(username, password);
-    setSession(accessToken, principal); // notifies -> setUser via subscription
+    persist(await api.login(username, password));
+  }
+
+  async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    persist(await api.changePassword(currentPassword, newPassword));
+  }
+
+  function enrollMfa(): Promise<{ secret: string; otpauthUri: string }> {
+    return api.mfaEnroll();
+  }
+
+  async function verifyMfa(code: string): Promise<void> {
+    persist(await api.mfaVerify(code));
   }
 
   function logout(): void {
@@ -45,7 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, login, changePassword, enrollMfa, verifyMfa, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

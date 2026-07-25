@@ -14,6 +14,14 @@ import { clearSession, getToken, type SessionUser } from './session';
 export interface LoginResponse {
   accessToken: string;
   user: SessionUser;
+  mustChangePassword: boolean;
+  mfaRequired: boolean;
+  mustEnrolMfa: boolean;
+}
+
+export interface MfaEnrolResponse {
+  secret: string;
+  otpauthUri: string;
 }
 
 export interface ArrearsBucket {
@@ -200,6 +208,31 @@ async function errorMessage(res: Response): Promise<string> {
 export const api = {
   login: (username: string, password: string) =>
     postJson<LoginResponse>('/auth/login', { username, password }),
+  // A wrong current password / weak new password is a FORM error, not a session
+  // expiry — so change-password and mfa-verify deliberately do NOT clearSession()
+  // on 401 (that would sign the user out mid-flow).
+  changePassword: async (
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<LoginResponse> => {
+    const res = await fetch('/auth/change-password', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    if (!res.ok) throw new Error(await errorMessage(res));
+    return res.json() as Promise<LoginResponse>;
+  },
+  mfaEnroll: () => postJson<MfaEnrolResponse>('/auth/mfa/enroll', {}),
+  mfaVerify: async (code: string): Promise<LoginResponse> => {
+    const res = await fetch('/auth/mfa/verify', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) throw new Error(await errorMessage(res));
+    return res.json() as Promise<LoginResponse>;
+  },
   collectionsSummary: () =>
     getJson<CollectionsSummary>('/api/finance/collections-summary'),
   arrearsAgeing: () => getJson<ArrearsBucket[]>('/api/finance/arrears-ageing'),

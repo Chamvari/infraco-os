@@ -20,6 +20,7 @@ export function AppShell({
   userInitials,
   roleLabel = 'Admin',
   onSignOut,
+  onChangePassword,
   children,
 }: {
   sections: NavSection[];
@@ -31,6 +32,7 @@ export function AppShell({
   userInitials: string;
   roleLabel?: string;
   onSignOut: () => void;
+  onChangePassword?: () => void;
   children: ReactNode;
 }) {
   return (
@@ -61,6 +63,12 @@ export function AppShell({
           </div>
         ))}
 
+        {onChangePassword && (
+          <button className="nav-logout" onClick={onChangePassword}>
+            <span className="ic">🔑</span>
+            <span>Change password</span>
+          </button>
+        )}
         <button className="nav-logout" onClick={onSignOut}>
           <span className="ic">⏏</span>
           <span>Sign out</span>

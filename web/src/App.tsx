@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { LoginPage } from './components/LoginPage';
+import { ForcePasswordChange } from './components/ForcePasswordChange';
+import { ForceMfaEnrol } from './components/ForceMfaEnrol';
+import { ChangePasswordForm } from './components/ChangePasswordForm';
 import { FinanceDashboard } from './components/FinanceDashboard';
 import { PlotInventory } from './components/PlotInventory';
 import { MapView } from './components/MapView';
@@ -61,16 +64,20 @@ function initials(username?: string): string {
   return letters.toUpperCase();
 }
 
-// Gate: authenticated → admin shell, otherwise the login screen.
+// Gate: login → forced password change → forced MFA enrol → admin shell.
 export function App() {
   const { user } = useAuth();
-  return user ? <AdminApp /> : <LoginPage />;
+  if (!user) return <LoginPage />;
+  if (user.mustChangePassword) return <ForcePasswordChange />;
+  if (user.mustEnrolMfa) return <ForceMfaEnrol />;
+  return <AdminApp />;
 }
 
 function AdminApp() {
   const { user, logout } = useAuth();
   const [active, setActive] = useState('dashboard');
   const [reservePlotId, setReservePlotId] = useState('');
+  const [showChangePw, setShowChangePw] = useState(false);
 
   const canReserve = can(user, 'sales');
 
@@ -113,19 +120,59 @@ function AdminApp() {
   else content = <Placeholder label={meta.title} />;
 
   return (
-    <AppShell
-      sections={NAV}
-      activeId={active}
-      onNavigate={navigate}
-      title={meta.title}
-      subtitle={meta.subtitle}
-      month="Jun 2026"
-      userInitials={initials(user?.username)}
-      roleLabel={user?.roles?.[0] ?? 'Admin'}
-      onSignOut={logout}
-    >
-      {content}
-    </AppShell>
+    <>
+      <AppShell
+        sections={NAV}
+        activeId={active}
+        onNavigate={navigate}
+        title={meta.title}
+        subtitle={meta.subtitle}
+        month="Jun 2026"
+        userInitials={initials(user?.username)}
+        roleLabel={user?.roles?.[0] ?? 'Admin'}
+        onSignOut={logout}
+        onChangePassword={() => setShowChangePw(true)}
+      >
+        {content}
+      </AppShell>
+
+      {showChangePw && (
+        <div
+          onClick={() => setShowChangePw(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(14,23,38,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            zIndex: 100,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: 14,
+              padding: 24,
+              width: 'min(420px, 94vw)',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            }}
+          >
+            <div className="brand" style={{ fontSize: 16, marginBottom: 12 }}>
+              Change password
+            </div>
+            <ChangePasswordForm
+              onCancel={() => setShowChangePw(false)}
+              onDone={() => window.setTimeout(() => setShowChangePw(false), 900)}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
