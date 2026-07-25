@@ -23,6 +23,11 @@ describe('Module Z auth guards', () => {
     tokens = new TokenService();
   });
 
+  // MFA enforcement is env-gated; keep it off by default and clean up per test.
+  afterEach(() => {
+    delete process.env.MFA_ENFORCED;
+  });
+
   const ctxFor = (req: { headers: Record<string, unknown>; user?: AuthPrincipal }) =>
     ({
       switchToHttp: () => ({ getRequest: () => req }),
@@ -113,6 +118,29 @@ describe('Module Z auth guards', () => {
         guardWith({ ...activeState, status: 'suspended' }).canActivate(ctx),
       ).rejects.toThrow(UnauthorizedException);
     });
+
+    it('mustEnrolMfa: set for an enforced role without MFA when MFA_ENFORCED=true', async () => {
+      process.env.MFA_ENFORCED = 'true';
+      const token = tokens.sign({
+        sub: 'a', role: 'sys_admin', roles: ['sys_admin'], mfa: false, tokenVersion: 0,
+      });
+      const req: { headers: Record<string, unknown>; user?: AuthPrincipal } = {
+        headers: { authorization: `Bearer ${token}` },
+      };
+      await guardWith({ ...activeState, mfa_enabled: false }).canActivate(ctxFor(req));
+      expect(req.user?.mustEnrolMfa).toBe(true);
+    });
+
+    it('mustEnrolMfa: never set when MFA_ENFORCED is off (default)', async () => {
+      const token = tokens.sign({
+        sub: 'a', role: 'sys_admin', roles: ['sys_admin'], mfa: false, tokenVersion: 0,
+      });
+      const req: { headers: Record<string, unknown>; user?: AuthPrincipal } = {
+        headers: { authorization: `Bearer ${token}` },
+      };
+      await guardWith({ ...activeState, mfa_enabled: false }).canActivate(ctxFor(req));
+      expect(req.user?.mustEnrolMfa).toBe(false);
+    });
   });
 
   // ----- ForcedFlowGuard: hard-block pending flows (403) -------------------
@@ -196,16 +224,30 @@ describe('Module Z auth guards', () => {
       expect(guard.canActivate(ctx)).toBe(true);
     });
 
-    it('denies a sensitive @Mfa action when MFA is NOT satisfied (403)', () => {
+    it('@Mfa when ENFORCED: denies without a satisfied second factor (403)', () => {
+      process.env.MFA_ENFORCED = 'true';
       const guard = makeGuard(['finance_mgr'], true);
       const ctx = ctxFor({ headers: {}, user: principal(['finance_mgr'], false) });
       expect(() => guard.canActivate(ctx)).toThrow(/MFA/);
     });
 
-    it('allows a sensitive @Mfa action when MFA IS satisfied', () => {
+    it('@Mfa when ENFORCED: allows once MFA is satisfied', () => {
+      process.env.MFA_ENFORCED = 'true';
       const guard = makeGuard(['finance_mgr'], true);
       const ctx = ctxFor({ headers: {}, user: principal(['finance_mgr'], true) });
       expect(guard.canActivate(ctx)).toBe(true);
+    });
+
+    it('@Mfa when NOT enforced (default): passes on the role check alone', () => {
+      const guard = makeGuard(['finance_mgr'], true);
+      const ctx = ctxFor({ headers: {}, user: principal(['finance_mgr'], false) });
+      expect(guard.canActivate(ctx)).toBe(true);
+    });
+
+    it('@Mfa when NOT enforced: still enforces the ROLE (403 on wrong role)', () => {
+      const guard = makeGuard(['finance_mgr'], true);
+      const ctx = ctxFor({ headers: {}, user: principal(['sales_agent'], false) });
+      expect(() => guard.canActivate(ctx)).toThrow(/role/i);
     });
 
     it('read_finance: allows an oversight role (exec) to read', () => {

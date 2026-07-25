@@ -8,7 +8,7 @@ import { Reflector } from '@nestjs/core';
 import { TokenService } from './token.service';
 import { PrismaService } from '../../prisma.service';
 import { IS_PUBLIC_KEY } from './auth.decorators';
-import { MFA_ENFORCED_ROLES } from './auth.constants';
+import { MFA_ENFORCED_ROLES, mfaEnforced } from './auth.constants';
 import { JwtError } from './jwt.util';
 import { RequestWithUser } from './auth.types';
 
@@ -96,6 +96,7 @@ export class JwtAuthGuard implements CanActivate {
       // Live gates from current DB state (authoritative over the token claims).
       mustChange: state.must_change_password,
       mustEnrolMfa:
+        mfaEnforced() &&
         !state.must_change_password &&
         !state.mfa_enabled &&
         roles.some((r) => MFA_ENFORCED_ROLES.has(r)),

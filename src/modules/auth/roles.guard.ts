@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY, MFA_KEY } from './auth.decorators';
+import { mfaEnforced } from './auth.constants';
 import { RequestWithUser } from './auth.types';
 
 /**
@@ -51,7 +52,9 @@ export class RolesGuard implements CanActivate {
       }
     }
 
-    if (requiresMfa && !user.mfa) {
+    // @Mfa step-up only bites when MFA is enforced; otherwise the action passes
+    // on its role check alone (MFA code stays intact, just dormant).
+    if (requiresMfa && mfaEnforced() && !user.mfa) {
       throw new ForbiddenException('MFA is required for this action.');
     }
 

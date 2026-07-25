@@ -68,6 +68,10 @@ describe('AuthService', () => {
     service = new AuthService(prisma as unknown as PrismaService, tokens);
   });
 
+  afterEach(() => {
+    delete process.env.MFA_ENFORCED; // MFA enforcement is env-gated; keep tests isolated
+  });
+
   describe('login', () => {
     it('issues a verifiable token but does NOT satisfy MFA at first-factor login', async () => {
       setUser();
@@ -122,6 +126,14 @@ describe('AuthService', () => {
         HttpException,
       );
       expect(prisma.withActor).not.toHaveBeenCalled(); // no login-success side effects
+    });
+
+    it('gates mustEnrolMfa on MFA_ENFORCED for an enforced role', async () => {
+      setUser({ mfa_enabled: false }); // sys_admin (enforced role), no MFA yet
+      process.env.MFA_ENFORCED = 'true';
+      expect((await service.login('demo_admin', 'correct horse')).mustEnrolMfa).toBe(true);
+      delete process.env.MFA_ENFORCED;
+      expect((await service.login('demo_admin', 'correct horse')).mustEnrolMfa).toBe(false);
     });
   });
 

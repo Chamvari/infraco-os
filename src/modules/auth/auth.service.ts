@@ -10,7 +10,7 @@ import { PrismaService } from '../../prisma.service';
 import { TokenService } from './token.service';
 import { hashPassword, verifyPassword } from './password.util';
 import { checkPasswordPolicy } from './password-policy';
-import { MFA_ENFORCED_ROLES } from './auth.constants';
+import { MFA_ENFORCED_ROLES, mfaEnforced } from './auth.constants';
 import { generateSecret, otpauthUri, verifyTotp } from './totp.util';
 
 export interface LoginResult {
@@ -449,7 +449,7 @@ export class AuthService {
   // ── Helpers ─────────────────────────────────────────────────
 
   private mfaEnrolRequired(roles: string[], mfaEnabled: boolean): boolean {
-    return !mfaEnabled && roles.some((r) => MFA_ENFORCED_ROLES.has(r));
+    return mfaEnforced() && !mfaEnabled && roles.some((r) => MFA_ENFORCED_ROLES.has(r));
   }
 
   private tempExpired(at: Date | string | null): boolean {
